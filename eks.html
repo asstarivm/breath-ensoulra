@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>身體感受問卷 · 補充</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; min-height: 100%; background: #010102; color: #f7f8f8; font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; }
+  .container { max-width: 640px; margin: 0 auto; padding: 40px 20px 80px; }
+  h1 { font-size: 1.3rem; font-weight: 400; letter-spacing: 2px; margin-bottom: 8px; }
+  h2 { font-size: 0.85rem; font-weight: 400; color: rgba(247,248,248,0.5); letter-spacing: 1px; margin-bottom: 32px; }
+  .scale-label { font-size: 0.75rem; color: rgba(247,248,248,0.4); letter-spacing: 1px; margin-top: 28px; margin-bottom: 10px; border-bottom: 1px solid rgba(247,248,248,0.1); padding-bottom: 6px; }
+  .item { margin-bottom: 18px; }
+  .item-text { font-size: 0.95rem; margin-bottom: 8px; }
+  .item-text .num { color: rgba(247,248,248,0.35); margin-right: 6px; }
+  .options { display: flex; gap: 4px; flex-wrap: wrap; }
+  .opt { flex: 1; min-width: 50px; text-align: center; }
+  .opt input { display: none; }
+  .opt label { display: block; padding: 10px 4px; border: 1px solid rgba(247,248,248,0.15); border-radius: 4px; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; color: rgba(247,248,248,0.6); }
+  .opt label:hover { border-color: rgba(247,248,248,0.4); color: rgba(247,248,248,0.9); }
+  .opt input:checked + label { background: rgba(247,248,248,0.15); border-color: rgba(247,248,248,0.6); color: #f7f8f8; }
+  .scale-row { font-size: 0.65rem; color: rgba(247,248,248,0.3); display: flex; justify-content: space-between; margin-bottom: 20px; padding: 0 2px; }
+  .btn-row { margin-top: 40px; display: flex; gap: 12px; }
+  .btn { padding: 14px 28px; border: 1px solid rgba(247,248,248,0.3); border-radius: 4px; background: transparent; color: #f7f8f8; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; font-family: inherit; letter-spacing: 1px; }
+  .btn:hover { background: rgba(247,248,248,0.1); border-color: rgba(247,248,248,0.5); }
+  .btn.primary { background: rgba(247,248,248,0.1); }
+  .btn.primary:hover { background: rgba(247,248,248,0.2); }
+  .progress { position: fixed; top: 0; left: 0; height: 2px; background: rgba(247,248,248,0.3); transition: width 0.3s; z-index: 100; }
+  .done { text-align: center; padding: 60px 20px; }
+  .done h1 { font-size: 1.1rem; font-weight: 400; margin-bottom: 12px; }
+  .done p { color: rgba(247,248,248,0.5); font-size: 0.85rem; margin-bottom: 24px; }
+  .done .data-preview { text-align: left; background: rgba(247,248,248,0.05); border: 1px solid rgba(247,248,248,0.1); border-radius: 4px; padding: 16px; font-size: 0.75rem; font-family: monospace; color: rgba(247,248,248,0.6); max-height: 300px; overflow: auto; margin-bottom: 24px; white-space: pre-wrap; word-break: break-all; }
+  .hidden { display: none; }
+  .note { font-size: 0.75rem; color: rgba(247,248,248,0.35); margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="progress" id="progressBar" style="width:0%"></div>
+<div class="container" id="formContainer">
+  <h1 id="title">身體感受問卷 · 補充</h1>
+  <h2 id="subtitle"></h2>
+  <div id="questionsSection"></div>
+  <div class="btn-row">
+    <button class="btn primary" id="submitBtn">提交</button>
+    <button class="btn" id="exportBtn" style="display:none">下載資料</button>
+  </div>
+</div>
+<div class="container hidden" id="doneContainer">
+  <div class="done">
+    <h1>完成了</h1>
+    <p>謝謝你。請將下載的檔案傳回給研究員。</p>
+    <div class="data-preview" id="dataPreview"></div>
+    <button class="btn primary" id="downloadBtn">下載 JSON 檔案</button>
+  </div>
+</div>
+<script>
+// ── EKS v0.2 — Embodied Knowing Shift ──
+// 6 items, 6-point Likert (0-5)
+// Measures epistemic stance: mind→body (object) vs body→self (subject)
+
+const EKS_ITEMS = [
+  { id: 1, text: '我在用頭腦分析自己的身體狀態。', reverse: true, dimension: 'mind-to-body' },
+  { id: 2, text: '我的身體感覺在告訴我我是誰。', reverse: false, dimension: 'body-to-self' },
+  { id: 3, text: '我像旁觀者一樣看著自己的身體。', reverse: true, dimension: 'object-stance' },
+  { id: 4, text: '我不需要分析，就能直接感受到身體的狀態。', reverse: false, dimension: 'direct-knowing' },
+  { id: 5, text: '我的身體是我體驗世界的方式。', reverse: false, dimension: 'body-as-subject' },
+  { id: 6, text: '我跟自己的身體感覺之間有距離。', reverse: true, dimension: 'distance' },
+];
+
+const LIKERT = [
+  { value: 0, label: '從不' },
+  { value: 1, label: '非常少' },
+  { value: 2, label: '少數時候' },
+  { value: 3, label: '約一半' },
+  { value: 4, label: '多數時候' },
+  { value: 5, label: '總是' },
+];
+
+// ── Phase detection ──
+const params = new URLSearchParams(location.search);
+const phase = params.get('phase') || 'pre';
+const isPre = phase !== 'post';
+const today = new Date().toISOString().slice(0,10);
+const storageKey = `breath_eks_${phase}_${today}`;
+
+document.getElementById('title').textContent = isPre ? '身體感受問卷 · 補充 · 前測' : '身體感受問卷 · 補充 · 後測';
+document.getElementById('subtitle').textContent = '在過去的幾分鐘裡，以下描述對你來說有多真實？';
+
+// ── Build questions ──
+const qSection = document.getElementById('questionsSection');
+
+const scaleLabel = document.createElement('div');
+scaleLabel.className = 'scale-label';
+scaleLabel.textContent = '身體與自己的關係';
+qSection.appendChild(scaleLabel);
+
+const scaleRow = document.createElement('div');
+scaleRow.className = 'scale-row';
+scaleRow.innerHTML = `<span>0 從不真實</span><span>5 總是真實</span>`;
+qSection.appendChild(scaleRow);
+
+const totalQuestions = EKS_ITEMS.length;
+
+EKS_ITEMS.forEach(item => {
+  const itemDiv = document.createElement('div');
+  itemDiv.className = 'item';
+  itemDiv.innerHTML = `
+    <div class="item-text"><span class="num">${item.id}.</span>${item.text}${item.reverse ? ' <span class="note">(反向計分)</span>' : ''}</div>
+    <div class="options">
+      ${LIKERT.map(l => `<div class="opt"><input type="radio" name="q${item.id}" value="${l.value}" id="q${item.id}_${l.value}"><label for="q${item.id}_${l.value}">${l.label}</label></div>`).join('')}
+    </div>
+  `;
+  qSection.appendChild(itemDiv);
+});
+
+// ── Progress tracking ──
+function updateProgress() {
+  const answered = document.querySelectorAll('.options input:checked').length;
+  const pct = Math.min(100, (answered / totalQuestions) * 100);
+  document.getElementById('progressBar').style.width = pct + '%';
+}
+qSection.addEventListener('change', updateProgress);
+
+// ── Submit ──
+document.getElementById('submitBtn').addEventListener('click', () => {
+  const answered = document.querySelectorAll('.options input:checked').length;
+  if (answered < totalQuestions) {
+    alert(`還有 ${totalQuestions - answered} 題未作答，請完成後再提交。`);
+    return;
+  }
+
+  // Collect responses
+  const responses = EKS_ITEMS.map(item => {
+    const val = parseInt(document.querySelector(`input[name="q${item.id}"]:checked`).value);
+    return {
+      id: item.id,
+      text: item.text,
+      rawScore: val,
+      reverse: item.reverse,
+      dimension: item.dimension,
+      score: item.reverse ? (5 - val) : val,
+    };
+  });
+
+  // Calculate EKS total score
+  const scores = responses.map(r => r.score);
+  const eksScore = {
+    mean: +(scores.reduce((a,b) => a+b, 0) / scores.length).toFixed(2),
+    sum: scores.reduce((a,b) => a+b, 0),
+    items: scores,
+  };
+
+  // Sub-dimension scores
+  const positive = responses.filter(r => !r.reverse).map(r => r.score);
+  const negative = responses.filter(r => r.reverse).map(r => r.score);
+  const subScores = {
+    bodyAsSubject: { // positive items (2, 4, 5)
+      mean: +(positive.reduce((a,b) => a+b, 0) / positive.length).toFixed(2),
+      items: positive,
+    },
+    mindAsObserver: { // negative items (1, 3, 6)
+      mean: +(negative.reduce((a,b) => a+b, 0) / negative.length).toFixed(2),
+      items: negative,
+    },
+  };
+
+  const payload = {
+    type: 'eks',
+    version: 'v0.2',
+    phase: phase,
+    date: today,
+    timestamp: new Date().toISOString(),
+    eksScore,
+    subScores,
+    responses,
+  };
+
+  // Save to localStorage
+  localStorage.setItem(storageKey, JSON.stringify(payload));
+
+  // Show done screen
+  document.getElementById('formContainer').classList.add('hidden');
+  document.getElementById('doneContainer').classList.remove('hidden');
+  document.getElementById('dataPreview').textContent = JSON.stringify(payload, null, 2);
+  document.getElementById('exportBtn').style.display = 'inline-block';
+});
+
+// ── Download ──
+function downloadJSON() {
+  const data = localStorage.getItem(storageKey);
+  if (!data) return;
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `eks-${phase}-${today}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+document.getElementById('downloadBtn').addEventListener('click', downloadJSON);
+document.getElementById('exportBtn')?.addEventListener('click', downloadJSON);
+</script>
+</body>
+</html>

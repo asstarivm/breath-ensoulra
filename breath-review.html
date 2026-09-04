@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>呼吸痕跡</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #010102; color: #f7f8f8; font-family: -apple-system, 'Helvetica Neue', sans-serif; padding: 20px; max-width: 640px; margin: 0 auto; }
+h1 { font-size: 1.1rem; font-weight: 300; opacity: 0.8; margin-bottom: 4px; }
+.subtitle { font-size: 0.75rem; opacity: 0.4; margin-bottom: 24px; }
+.timeline { position: relative; padding-left: 20px; }
+.timeline::before { content: ''; position: absolute; left: 6px; top: 0; bottom: 0; width: 1px; background: rgba(247,248,248,0.1); }
+.event { position: relative; padding: 8px 0 8px 16px; font-size: 0.8rem; line-height: 1.5; }
+.event::before { content: ''; position: absolute; left: -14px; top: 14px; width: 6px; height: 6px; border-radius: 50%; background: rgba(247,248,248,0.3); }
+.event.touch-down::before { background: rgba(247,248,248,0.8); }
+.event.touch-up::before { background: rgba(247,248,248,0.5); }
+.event.visibility::before { background: rgba(255,200,100,0.6); }
+.event.idle::before { background: rgba(100,200,255,0.5); }
+.event .time { opacity: 0.4; font-size: 0.7rem; }
+.event .type { opacity: 0.7; }
+.event .detail { opacity: 0.5; font-size: 0.7rem; }
+.entry-marker { border-left: 2px solid rgba(100,255,150,0.5); padding-left: 14px; margin: 8px 0; }
+.entry-marker .label { color: rgba(100,255,150,0.8); font-size: 0.7rem; margin-bottom: 4px; }
+.bip { border-left: 2px solid rgba(255,100,100,0.4); padding-left: 14px; margin: 8px 0; }
+.bip .label { color: rgba(255,100,100,0.7); font-size: 0.7rem; margin-bottom: 4px; }
+.summary { margin: 24px 0; padding: 16px; border: 1px solid rgba(247,248,248,0.1); border-radius: 8px; }
+.summary h2 { font-size: 0.85rem; font-weight: 400; opacity: 0.7; margin-bottom: 12px; }
+.summary .row { display: flex; justify-content: space-between; font-size: 0.75rem; padding: 4px 0; opacity: 0.6; }
+.summary .row .val { opacity: 0.9; }
+.upload-area { margin: 24px 0; padding: 20px; border: 1px dashed rgba(247,248,248,0.15); border-radius: 8px; text-align: center; font-size: 0.8rem; opacity: 0.4; cursor: pointer; transition: opacity 0.3s; }
+.upload-area:hover { opacity: 0.7; }
+.upload-area input { display: none; }
+.empty { text-align: center; opacity: 0.3; padding: 40px; font-size: 0.8rem; }
+</style>
+</head>
+<body>
+
+<h1>呼吸痕跡</h1>
+<div class="subtitle">事後重建 — 載入你的 breath-traces JSON 檔案</div>
+
+<div class="upload-area" id="uploadArea">
+  選擇檔案或拖放 JSON
+  <input type="file" id="fileInput" accept=".json">
+</div>
+
+<div id="content">
+  <div class="empty">載入檔案後，這裡會顯示你的呼吸事件時間線</div>
+</div>
+
+<script>
+var uploadArea = document.getElementById('uploadArea');
+var fileInput = document.getElementById('fileInput');
+var content = document.getElementById('content');
+
+uploadArea.addEventListener('click', function() { fileInput.click(); });
+fileInput.addEventListener('change', handleFile);
+
+uploadArea.addEventListener('dragover', function(e) { e.preventDefault(); uploadArea.style.opacity = '0.8'; });
+uploadArea.addEventListener('dragleave', function(e) { uploadArea.style.opacity = '0.4'; });
+uploadArea.addEventListener('drop', function(e) {
+  e.preventDefault();
+  uploadArea.style.opacity = '0.4';
+  if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
+});
+
+function handleFile(e) {
+  if (e.target.files[0]) processFile(e.target.files[0]);
+}
+
+function processFile(file) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = JSON.parse(e.target.result);
+      renderData(data);
+    } catch(err) {
+      content.innerHTML = '<div class="empty">無法解析 JSON</div>';
+    }
+  };
+  reader.readAsText(file);
+}
+
+function formatTime(ts) {
+  var d = new Date(ts);
+  return d.getHours().toString().padStart(2,'0') + ':' + 
+         d.getMinutes().toString().padStart(2,'0') + ':' +
+         d.getSeconds().toString().padStart(2,'0');
+}
+
+function formatDuration(sec) {
+  if (sec < 60) return sec + 's';
+  var m = Math.floor(sec / 60);
+  var s = sec % 60;
+  return m + 'm ' + s + 's';
+}
+
+function renderData(data) {
+  var html = '';
+  
+  // Summary
+  html += '<div class="summary">';
+  html += '<h2>摘要</h2>';
+  html += '<div class="row"><span>版本</span><span class="val">' + (data.version || 'unknown') + '</span></div>';
+  html += '<div class="row"><span> session 時長</span><span class="val">' + formatDuration(data.sessionDurationSec || 0) + '</span></div>';
+  html += '<div class="row"><span>觸碰次數</span><span class="val">' + (data.touches || 0) + '</span></div>';
+  html += '<div class="row"><span>dwell 次數</span><span class="val">' + (data.dwellTimes ? data.dwellTimes.length : 0) + '</span></div>';
+  html += '<div class="row"><span>idle 窗口</span><span class="val">' + (data.idleWindows ? data.idleWindows.length : 0) + '</span></div>';
+  html += '<div class="row"><span>visibility 事件</span><span class="val">' + (data.visibilityEvents ? data.visibilityEvents.length : 0) + '</span></div>';
+  html += '<div class="row"><span>總事件數</span><span class="val">' + (data.eventLog ? data.eventLog.length : 0) + '</span></div>';
+  html += '</div>';
+
+  // Compute BIPs and Entry Marker (same logic as analyze-breath-data.js)
+  var bips = [];
+  var visEvents = data.visibilityEvents || [];
+  for (var i = 1; i < visEvents.length; i++) {
+    if (visEvents[i].state === 'visible' && visEvents[i-1].state === 'hidden') {
+      bips.push(visEvents[i]);
+    }
+  }
+
+  var entryMarker = null;
+  var eventLog = data.eventLog || [];
+  for (var i = 0; i < eventLog.length; i++) {
+    if (eventLog[i].type === 'idle' && eventLog[i].data && eventLog[i].data.gap > 5000) {
+      for (var j = i + 1; j < eventLog.length; j++) {
+        if (eventLog[j].type === 'touch' && eventLog[j].data && eventLog[j].data.type === 'up' && eventLog[j].data.dwell > 10) {
+          entryMarker = { ts: eventLog[j].ts, idleGap: eventLog[i].data.gap, dwell: eventLog[j].data.dwell };
+          break;
+        }
+      }
+      if (entryMarker) break;
+    }
+  }
+
+  // BIPs section
+  if (bips.length > 0) {
+    html += '<div class="bip"><div class="label">⚡ Breaks in Presence: ' + bips.length + '</div>';
+    bips.forEach(function(b) {
+      html += '<div class="event"><span class="time">' + formatTime(b.ts) + '</span> <span class="type">回到頁面</span></div>';
+    });
+    html += '</div>';
+  }
+
+  // Entry marker
+  if (entryMarker) {
+    html += '<div class="entry-marker"><div class="label">🌟 Entry Marker — 進入在場</div>';
+    html += '<div class="event"><span class="time">' + formatTime(entryMarker.ts) + '</span>';
+    html += ' <span class="detail">idle ' + (entryMarker.idleGap/1000).toFixed(1) + 's → dwell ' + entryMarker.dwell + 's</span></div>';
+    html += '</div>';
+  }
+
+  // Timeline
+  html += '<div class="timeline">';
+  
+  if (eventLog.length > 0) {
+    eventLog.forEach(function(ev) {
+      var cls = 'event';
+      var typeText = ev.type;
+      var detail = '';
+      
+      if (ev.type === 'touch' && ev.data) {
+        cls += ' touch-' + ev.data.type;
+        typeText = '觸碰 ' + (ev.data.type === 'down' ? '開始' : '結束');
+        if (ev.data.dwell) detail = 'dwell ' + ev.data.dwell + 's';
+      } else if (ev.type === 'visibility' && ev.data) {
+        cls += ' visibility';
+        typeText = ev.data.state === 'hidden' ? '離開頁面' : '回到頁面';
+      } else if (ev.type === 'idle' && ev.data) {
+        cls += ' idle';
+        typeText = '閒置';
+        detail = 'gap ' + (ev.data.gap/1000).toFixed(1) + 's';
+      }
+      
+      html += '<div class="' + cls + '">';
+      html += '<span class="time">' + formatTime(ev.ts) + '</span> ';
+      html += '<span class="type">' + typeText + '</span>';
+      if (detail) html += ' <span class="detail">' + detail + '</span>';
+      html += '</div>';
+    });
+  } else if (data.touchEvents && data.touchEvents.length > 0) {
+    // V2 backward compat: render from touchEvents
+    data.touchEvents.forEach(function(ev) {
+      var cls = 'event touch-' + ev.type;
+      var typeText = ev.type === 'down' ? '觸碰開始' : ev.type === 'up' ? '觸碰結束' : '離開';
+      html += '<div class="' + cls + '">';
+      html += '<span class="time">' + formatTime(ev.ts) + '</span> ';
+      html += '<span class="type">' + typeText + '</span>';
+      html += '</div>';
+    });
+  } else {
+    html += '<div class="empty">沒有事件數據</div>';
+  }
+  
+  html += '</div>';
+
+  content.innerHTML = html;
+}
+</script>
+</body>
+</html>

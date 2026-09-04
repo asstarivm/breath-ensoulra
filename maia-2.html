@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>身體感受問卷</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; min-height: 100%; background: #010102; color: #f7f8f8; font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; }
+  .container { max-width: 640px; margin: 0 auto; padding: 40px 20px 80px; }
+  h1 { font-size: 1.3rem; font-weight: 400; letter-spacing: 2px; margin-bottom: 8px; }
+  h2 { font-size: 0.85rem; font-weight: 400; color: rgba(247,248,248,0.5); letter-spacing: 1px; margin-bottom: 32px; }
+  .scale-label { font-size: 0.75rem; color: rgba(247,248,248,0.4); letter-spacing: 1px; margin-top: 28px; margin-bottom: 10px; border-bottom: 1px solid rgba(247,248,248,0.1); padding-bottom: 6px; }
+  .item { margin-bottom: 18px; }
+  .item-text { font-size: 0.95rem; margin-bottom: 8px; }
+  .item-text .num { color: rgba(247,248,248,0.35); margin-right: 6px; }
+  .options { display: flex; gap: 4px; flex-wrap: wrap; }
+  .opt { flex: 1; min-width: 50px; text-align: center; }
+  .opt input { display: none; }
+  .opt label { display: block; padding: 10px 4px; border: 1px solid rgba(247,248,248,0.15); border-radius: 4px; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; color: rgba(247,248,248,0.6); }
+  .opt label:hover { border-color: rgba(247,248,248,0.4); color: rgba(247,248,248,0.9); }
+  .opt input:checked + label { background: rgba(247,248,248,0.15); border-color: rgba(247,248,248,0.6); color: #f7f8f8; }
+  .scale-row { font-size: 0.65rem; color: rgba(247,248,248,0.3); display: flex; justify-content: space-between; margin-bottom: 20px; padding: 0 2px; }
+  .demographic { margin-bottom: 18px; }
+  .demographic label { display: block; font-size: 0.85rem; margin-bottom: 6px; color: rgba(247,248,248,0.7); }
+  .demographic input, .demographic select { width: 100%; padding: 10px; background: rgba(247,248,248,0.05); border: 1px solid rgba(247,248,248,0.15); border-radius: 4px; color: #f7f8f8; font-size: 0.9rem; font-family: inherit; }
+  .demographic input:focus, .demographic select:focus { outline: none; border-color: rgba(247,248,248,0.4); }
+  .open-q { margin-bottom: 18px; }
+  .open-q label { display: block; font-size: 0.85rem; margin-bottom: 6px; color: rgba(247,248,248,0.7); }
+  .open-q textarea { width: 100%; min-height: 80px; padding: 10px; background: rgba(247,248,248,0.05); border: 1px solid rgba(247,248,248,0.15); border-radius: 4px; color: #f7f8f8; font-size: 0.9rem; font-family: inherit; resize: vertical; }
+  .open-q textarea:focus { outline: none; border-color: rgba(247,248,248,0.4); }
+  .btn-row { margin-top: 40px; display: flex; gap: 12px; }
+  .btn { padding: 14px 28px; border: 1px solid rgba(247,248,248,0.3); border-radius: 4px; background: transparent; color: #f7f8f8; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; font-family: inherit; letter-spacing: 1px; }
+  .btn:hover { background: rgba(247,248,248,0.1); border-color: rgba(247,248,248,0.5); }
+  .btn.primary { background: rgba(247,248,248,0.1); }
+  .btn.primary:hover { background: rgba(247,248,248,0.2); }
+  .progress { position: fixed; top: 0; left: 0; height: 2px; background: rgba(247,248,248,0.3); transition: width 0.3s; z-index: 100; }
+  .done { text-align: center; padding: 60px 20px; }
+  .done h1 { font-size: 1.1rem; font-weight: 400; margin-bottom: 12px; }
+  .done p { color: rgba(247,248,248,0.5); font-size: 0.85rem; margin-bottom: 24px; }
+  .done .data-preview { text-align: left; background: rgba(247,248,248,0.05); border: 1px solid rgba(247,248,248,0.1); border-radius: 4px; padding: 16px; font-size: 0.75rem; font-family: monospace; color: rgba(247,248,248,0.6); max-height: 300px; overflow: auto; margin-bottom: 24px; white-space: pre-wrap; word-break: break-all; }
+  .hidden { display: none; }
+  .note { font-size: 0.75rem; color: rgba(247,248,248,0.35); margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="progress" id="progressBar" style="width:0%"></div>
+<div class="container" id="formContainer">
+  <h1 id="title">身體感受問卷</h1>
+  <h2 id="subtitle"></h2>
+  <div id="demographicsSection"></div>
+  <div id="questionsSection"></div>
+  <div id="followupSection"></div>
+  <div class="btn-row">
+    <button class="btn primary" id="submitBtn">提交</button>
+    <button class="btn" id="exportBtn" style="display:none">下載資料</button>
+  </div>
+</div>
+<div class="container hidden" id="doneContainer">
+  <div class="done">
+    <h1>完成了</h1>
+    <p>謝謝你。請將下載的檔案傳回給研究員。</p>
+    <div class="data-preview" id="dataPreview"></div>
+    <button class="btn primary" id="downloadBtn">下載 JSON 檔案</button>
+  </div>
+</div>
+<script>
+// ── Brief MAIA-2 24 items (confirmed selection) ──
+const SCALES = [
+  { name: 'Noticing', label: '注意到身體感覺', items: [
+    { id: 2,  text: '我注意到自己身體不舒適的時候。', reverse: false },
+    { id: 3,  text: '我注意到身體哪個部位是舒適的。', reverse: false },
+    { id: 4,  text: '我注意到呼吸的變化，例如變慢或變快。', reverse: false },
+  ]},
+  { name: 'Not-Distracting', label: '不分心', items: [
+    { id: 6,  text: '我用其他事物轉移自己對不適感的注意力。', reverse: true },
+    { id: 9,  text: '我透過專注於某件事來推開不適的感覺。', reverse: true },
+    { id: 10, text: '當我感到身體不愉快時，我用其他事情佔據自己，這樣就不用去感受它。', reverse: true },
+  ]},
+  { name: 'Not-Worrying', label: '不擔憂', items: [
+    { id: 11, text: '當我感到身體疼痛時，我會變得心煩意亂。', reverse: true },
+    { id: 12, text: '如果我感到任何不適，我就開始擔心是不是出了什麼問題。', reverse: true },
+    { id: 15, text: '當我不適或疼痛時，我無法將它從腦中趕走。', reverse: true },
+  ]},
+  { name: 'Attention Regulation', label: '注意力調節', items: [
+    { id: 17, text: '即使周圍有很多事情在發生，我仍能維持對內在身體感覺的覺察。', reverse: false },
+    { id: 19, text: '如果我分心了，我可以將覺察拉回到身體。', reverse: false },
+    { id: 20, text: '我可以注意我的整個身體，而不只是某個特定部位。', reverse: false },
+  ]},
+  { name: 'Emotional Awareness', label: '情緒覺察', items: [
+    { id: 25, text: '我注意到自己平靜下來時身體的感覺。', reverse: false },
+    { id: 26, text: '我注意到當我感到舒適時，呼吸變得自由而輕鬆。', reverse: false },
+    { id: 27, text: '我注意到感到快樂/喜悅時身體的變化。', reverse: false },
+  ]},
+  { name: 'Self-Regulation', label: '自我調節', items: [
+    { id: 29, text: '當我把覺察帶到身體時，我感到一種平靜。', reverse: false },
+    { id: 30, text: '我可以用呼吸來減少緊張。', reverse: false },
+    { id: 31, text: '當我陷入思緒中時，我可以透過專注於身體/呼吸來平靜我的心智。', reverse: false },
+  ]},
+  { name: 'Body Listening', label: '身體傾聽', items: [
+    { id: 32, text: '我傾聽身體來告訴我正在感受什麼。', reverse: false },
+    { id: 33, text: '當我心情不好時，我會花時間探索身體的感覺。', reverse: false },
+    { id: 34, text: '我傾聽身體來告訴我該做什麼。', reverse: false },
+  ]},
+  { name: 'Trusting', label: '信任', items: [
+    { id: 35, text: '我在身體裡感到自在。', reverse: false },
+    { id: 36, text: '我感覺我的身體是一個安全的地方。', reverse: false },
+    { id: 37, text: '我信任我的身體的感覺。', reverse: false },
+  ]},
+];
+
+// ── EKS v0.2 — Embodied Knowing Shift (6 items) ──
+const EKS_ITEMS = [
+  { id: 'eks1', text: '我在用頭腦分析自己的身體狀態。', reverse: true, dimension: 'mind-to-body' },
+  { id: 'eks2', text: '我的身體感覺在告訴我我是誰。', reverse: false, dimension: 'body-to-self' },
+  { id: 'eks3', text: '我像旁觀者一樣看著自己的身體。', reverse: true, dimension: 'object-stance' },
+  { id: 'eks4', text: '我不需要分析，就能直接感受到身體的狀態。', reverse: false, dimension: 'direct-knowing' },
+  { id: 'eks5', text: '我的身體是我體驗世界的方式。', reverse: false, dimension: 'body-as-subject' },
+  { id: 'eks6', text: '我跟自己的身體感覺之間有距離。', reverse: true, dimension: 'distance' },
+];
+
+const LIKERT = [
+  { value: 0, label: '從不' },
+  { value: 1, label: '非常少' },
+  { value: 2, label: '少數時候' },
+  { value: 3, label: '約一半' },
+  { value: 4, label: '多數時候' },
+  { value: 5, label: '總是' },
+];
+
+// ── Phase detection ──
+const params = new URLSearchParams(location.search);
+const phase = params.get('phase') || 'pre';
+const isPre = phase !== 'post';
+const today = new Date().toISOString().slice(0,10);
+const storageKey = `breath_maia2_${phase}_${today}`;
+
+document.getElementById('title').textContent = isPre ? '身體感受問卷 · 前測' : '身體感受問卷 · 後測';
+document.getElementById('subtitle').textContent = '以下描述請根據你此時此刻的身體感受回答';
+
+// ── Build demographics (pre only) ──
+const demoSection = document.getElementById('demographicsSection');
+if (isPre) {
+  demoSection.innerHTML = `
+    <div class="scale-label">基本資訊</div>
+    <div class="demographic">
+      <label>年齡</label>
+      <input type="number" id="demo_age" min="18" max="100">
+    </div>
+    <div class="demographic">
+      <label>性別</label>
+      <select id="demo_gender">
+        <option value="">—</option>
+        <option value="female">女</option>
+        <option value="male">男</option>
+        <option value="other">其他</option>
+        <option value="prefer_not">不願回答</option>
+      </select>
+    </div>
+    <div class="demographic">
+      <label>是否規律運動？（每週 2 次以上）</label>
+      <select id="demo_exercise">
+        <option value="">—</option>
+        <option value="yes">是</option>
+        <option value="no">否</option>
+      </select>
+    </div>
+    <div class="demographic">
+      <label>是否有冥想/正念經驗？</label>
+      <select id="demo_meditation">
+        <option value="">—</option>
+        <option value="none">無</option>
+        <option value="occasional">偶爾</option>
+        <option value="regular">規律練習</option>
+      </select>
+    </div>
+  `;
+}
+
+// ── Build questions ──
+const qSection = document.getElementById('questionsSection');
+let totalQuestions = 0;
+SCALES.forEach(scale => {
+  const scaleDiv = document.createElement('div');
+  scaleDiv.className = 'scale-label';
+  scaleDiv.textContent = scale.label;
+  qSection.appendChild(scaleDiv);
+
+  scale.items.forEach(item => {
+    totalQuestions++;
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'item';
+    itemDiv.innerHTML = `
+      <div class="item-text"><span class="num">${item.id}.</span>${item.text}${item.reverse ? ' <span class="note">(反向計分)</span>' : ''}</div>
+      <div class="options">
+        ${LIKERT.map(l => `<div class="opt"><input type="radio" name="q${item.id}" value="${l.value}" id="q${item.id}_${l.value}"><label for="q${item.id}_${l.value}">${l.label}</label></div>`).join('')}
+      </div>
+    `;
+    qSection.appendChild(itemDiv);
+  });
+});
+
+// Likert scale labels row
+const scaleRow = document.createElement('div');
+scaleRow.className = 'scale-row';
+scaleRow.innerHTML = `<span>0 從不</span><span>5 總是</span>`;
+qSection.insertBefore(scaleRow, qSection.firstChild);
+
+// ── Build EKS section ──
+const eksSection = document.getElementById('followupSection');
+// EKS comes before follow-up questions for post, after MAIA-2 for pre
+const eksHTML = `
+  <div class="scale-label">身體與自己的關係</div>
+  <div class="scale-row"><span>0 從不</span><span>5 總是</span></div>
+`;
+const eksLabel = document.createElement('div');
+eksLabel.innerHTML = eksHTML;
+// Insert EKS after questions, before follow-up
+qSection.appendChild(eksLabel);
+
+EKS_ITEMS.forEach(item => {
+  totalQuestions++;
+  const itemDiv = document.createElement('div');
+  itemDiv.className = 'item';
+  itemDiv.innerHTML = `
+    <div class="item-text"><span class="num">${item.id.replace('eks','E')}.</span>${item.text}${item.reverse ? ' <span class="note">(反向計分)</span>' : ''}</div>
+    <div class="options">
+      ${LIKERT.map(l => `<div class="opt"><input type="radio" name="q${item.id}" value="${l.value}" id="q${item.id}_${l.value}"><label for="q${item.id}_${l.value}">${l.label}</label></div>`).join('')}
+    </div>
+  `;
+  qSection.appendChild(itemDiv);
+});
+
+// ── Build follow-up (post only) ──
+if (!isPre) {
+  followupSection.innerHTML = `
+    <div class="scale-label">使用後回顧</div>
+    <div class="open-q">
+      <label>使用 breath.html 時，你通常待多久？</label>
+      <textarea id="fup_duration" placeholder="大約幾分鐘..."></textarea>
+    </div>
+    <div class="open-q">
+      <label>你注意到呼吸圓的變化了嗎？</label>
+      <textarea id="fup_noticed" placeholder="..."></textarea>
+    </div>
+    <div class="open-q">
+      <label>使用過程中你有什麼感覺？</label>
+      <textarea id="fup_feeling" placeholder="..."></textarea>
+    </div>
+    <div class="open-q">
+      <label>你會想繼續使用嗎？為什麼？</label>
+      <textarea id="fup_continue" placeholder="..."></textarea>
+    </div>
+  `;
+}
+
+// ── Progress tracking ──
+function updateProgress() {
+  const answered = document.querySelectorAll('.options input:checked').length;
+  const pct = Math.min(100, (answered / totalQuestions) * 100);
+  document.getElementById('progressBar').style.width = pct + '%';
+}
+qSection.addEventListener('change', updateProgress);
+
+// ── Submit ──
+document.getElementById('submitBtn').addEventListener('click', () => {
+  const answered = document.querySelectorAll('.options input:checked').length;
+  if (answered < totalQuestions) {
+    alert(`還有 ${totalQuestions - answered} 題未作答，請完成後再提交。`);
+    return;
+  }
+
+  // Collect responses
+  const responses = {};
+  SCALES.forEach(scale => {
+    responses[scale.name] = scale.items.map(item => {
+      const val = parseInt(document.querySelector(`input[name="q${item.id}"]:checked`).value);
+      return {
+        id: item.id,
+        text: item.text,
+        rawScore: val,
+        reverse: item.reverse,
+        score: item.reverse ? (5 - val) : val,
+      };
+    });
+  });
+
+  // Calculate scale scores
+  const scaleScores = {};
+  SCALES.forEach(scale => {
+    const scores = responses[scale.name].map(r => r.score);
+    scaleScores[scale.name] = {
+      mean: +(scores.reduce((a,b) => a+b, 0) / scores.length).toFixed(2),
+      items: scores,
+    };
+  });
+
+  // Collect EKS responses
+  const eksResponses = EKS_ITEMS.map(item => {
+    const val = parseInt(document.querySelector(`input[name="q${item.id}"]:checked`).value);
+    return {
+      id: item.id,
+      text: item.text,
+      rawScore: val,
+      reverse: item.reverse,
+      dimension: item.dimension,
+      score: item.reverse ? (5 - val) : val,
+    };
+  });
+  const eksScores = eksResponses.map(r => r.score);
+  const eksPositive = eksResponses.filter(r => !r.reverse).map(r => r.score);
+  const eksNegative = eksResponses.filter(r => r.reverse).map(r => r.score);
+  const eksScore = {
+    mean: +(eksScores.reduce((a,b) => a+b, 0) / eksScores.length).toFixed(2),
+    sum: eksScores.reduce((a,b) => a+b, 0),
+    items: eksScores,
+    bodyAsSubject: {
+      mean: +(eksPositive.reduce((a,b) => a+b, 0) / eksPositive.length).toFixed(2),
+      items: eksPositive,
+    },
+    mindAsObserver: {
+      mean: +(eksNegative.reduce((a,b) => a+b, 0) / eksNegative.length).toFixed(2),
+      items: eksNegative,
+    },
+  };
+
+  // Demographics (pre only)
+  let demographics = null;
+  if (isPre) {
+    demographics = {
+      age: document.getElementById('demo_age')?.value || null,
+      gender: document.getElementById('demo_gender')?.value || null,
+      exercise: document.getElementById('demo_exercise')?.value || null,
+      meditation: document.getElementById('demo_meditation')?.value || null,
+    };
+  }
+
+  // Follow-up (post only)
+  let followup = null;
+  if (!isPre) {
+    followup = {
+      duration: document.getElementById('fup_duration')?.value || '',
+      noticed: document.getElementById('fup_noticed')?.value || '',
+      feeling: document.getElementById('fup_feeling')?.value || '',
+      continue: document.getElementById('fup_continue')?.value || '',
+    };
+  }
+
+  const payload = {
+    type: 'brief_maia2_eks',
+    phase: phase,
+    date: today,
+    timestamp: new Date().toISOString(),
+    demographics,
+    scaleScores,
+    responses,
+    eksScore,
+    eksResponses,
+    followup,
+  };
+
+  // Save to localStorage
+  localStorage.setItem(storageKey, JSON.stringify(payload));
+
+  // Show done screen
+  document.getElementById('formContainer').classList.add('hidden');
+  document.getElementById('doneContainer').classList.remove('hidden');
+  document.getElementById('dataPreview').textContent = JSON.stringify(payload, null, 2);
+  document.getElementById('exportBtn').style.display = 'inline-block';
+});
+
+// ── Download ──
+function downloadJSON() {
+  const data = localStorage.getItem(storageKey);
+  if (!data) return;
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `maia2-eks-${phase}-${today}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+document.getElementById('downloadBtn').addEventListener('click', downloadJSON);
+document.getElementById('exportBtn')?.addEventListener('click', downloadJSON);
+</script>
+</body>
+</html>
