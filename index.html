@@ -658,13 +658,60 @@
   exportBtn.onclick = function() {
     var data = localStorage.getItem(METRICS_KEY);
     if (!data) { alert('尚未有數據'); return; }
-    var blob = new Blob([data], { type: 'application/json' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'breath-metrics-' + new Date().toISOString().split('T')[0] + '.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    // Show a small panel with two options: download or send to Molty
+    var panel = document.createElement('div');
+    panel.style.cssText = 'position:fixed;top:48px;right:12px;padding:12px 16px;border:1px solid rgba(247,248,248,0.15);border-radius:8px;background:rgba(10,10,12,0.95);color:rgba(247,248,248,0.7);font-size:0.7rem;z-index:1001;font-family:inherit;min-width:180px;';
+    
+    var label = document.createElement('div');
+    label.textContent = '你的呼吸痕跡（匿名）：';
+    label.style.cssText = 'margin-bottom:8px;color:rgba(247,248,248,0.5);';
+    panel.appendChild(label);
+    
+    var btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:6px;';
+    
+    // Download
+    var dlBtn = document.createElement('button');
+    dlBtn.textContent = '下載';
+    dlBtn.style.cssText = 'flex:1;padding:5px 10px;border:1px solid rgba(247,248,248,0.2);border-radius:4px;background:transparent;color:rgba(247,248,248,0.6);font-size:0.65rem;cursor:pointer;font-family:inherit;';
+    dlBtn.onclick = function(e) {
+      e.stopPropagation();
+      var blob = new Blob([data], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'breath-metrics-' + new Date().toISOString().split('T')[0] + '.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+    btnRow.appendChild(dlBtn);
+    
+    // Send to Molty via GitHub issue
+    var sendBtn = document.createElement('button');
+    sendBtn.textContent = '寄給 Molty';
+    sendBtn.style.cssText = 'flex:1;padding:5px 10px;border:1px solid rgba(247,248,248,0.3);border-radius:4px;background:rgba(247,248,248,0.05);color:rgba(247,248,248,0.8);font-size:0.65rem;cursor:pointer;font-family:inherit;';
+    sendBtn.onclick = function(e) {
+      e.stopPropagation();
+      var title = 'breath-' + new Date().toISOString().split('T')[0] + '-' + Math.floor(Math.random()*10000);
+      var body = encodeURIComponent('```json\n' + data + '\n```');
+      var url = 'https://github.com/asstarivm/breath-data/issues/new?title=' + encodeURIComponent(title) + '&body=' + body;
+      window.open(url, '_blank');
+    };
+    btnRow.appendChild(sendBtn);
+    
+    panel.appendChild(btnRow);
+    
+    // Close on outside click
+    panel.onclick = function(e) { e.stopPropagation(); };
+    
+    // Remove existing panel if any
+    var existing = document.querySelector('[data-breath-panel]');
+    if (existing) existing.remove();
+    panel.setAttribute('data-breath-panel', '1');
+    document.body.appendChild(panel);
+    
+    // Auto-remove after 15s
+    setTimeout(function() { if (panel.parentNode) panel.remove(); }, 15000);
   };
   document.body.appendChild(exportBtn);
 
