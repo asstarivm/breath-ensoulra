@@ -51,6 +51,9 @@
 <!-- 緣側狀態標示 -->
 <div class="engawa-indicator">·</div>
 
+<!-- Ambient disclosure: localStorage attitude shift (Calm Technology principle) -->
+<div id="ambient-notice">這個空間會記住你的呼吸。離開時你可以帶走，或留下。</div>
+
 <!-- Metrics overlay — opt-in only (#17: user chooses, not system) -->
 <div id="metrics-overlay" style="opacity:0;pointer-events:none;transition:opacity 1s ease;">
   <div class="metric-item">觸碰：<span class="metric-value" id="m-touches">0</span></div>
@@ -185,6 +188,21 @@
   border-color: rgba(247,248,248,0.4);
   background: rgba(247,248,248,0.12);
 }
+
+/* Ambient notice — Calm Technology: inform and encalm, then resolve */
+#ambient-notice {
+  position: fixed; top: 50%; left: 50%;
+  transform: translate(-50%, 180px);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", sans-serif;
+  font-size: 12px; color: rgba(247,248,248,0.15);
+  text-align: center;
+  pointer-events: none; z-index: 5;
+  opacity: 0; transition: opacity 2s ease-in;
+  letter-spacing: 1px;
+  max-width: 80vw;
+}
+#ambient-notice.shown { opacity: 1; }
+#ambient-notice.faded { opacity: 0; }
 
 /* Delayed reveal: presence-first arrival (#17 framework) */
 .delayed-reveal { opacity: 0 !important; transition: opacity 2s ease-in; }
@@ -605,6 +623,15 @@
   }, 90000);
 
   // V3.1: metrics overlay + toggle removed — no live scores during session
+
+  // ===== Ambient disclosure: localStorage attitude shift =====
+  // Calm Technology: inform and encalm, use periphery, resolve without interaction
+  // Shows a gentle notice at 15s, fades out at 25s. No clicks needed.
+  var ambientNotice = document.getElementById('ambient-notice');
+  if (ambientNotice) {
+    setTimeout(function() { ambientNotice.classList.add('shown'); }, 15000);
+    setTimeout(function() { ambientNotice.classList.add('faded'); }, 25000);
+  }
 
   // ===== Wake Lock — keep screen awake while breathing =====
   var wakeLock = null;
