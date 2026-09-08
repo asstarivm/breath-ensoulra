@@ -588,8 +588,19 @@
             sendBtn.onclick = function(e) {
               e.stopPropagation();
               var title = 'breath-traces-' + new Date().toISOString().split('T')[0] + '-' + Math.floor(Math.random()*10000);
-              var body = encodeURIComponent('```json\n' + data + '\n```');
-              var url = 'https://github.com/asstarivm/breath-data/issues/new?title=' + encodeURIComponent(title) + '&body=' + body;
+              // Send summary only (full data via download) — GitHub URL has ~8K limit
+              var parsed = JSON.parse(data);
+              var summary = '呼吸痕跡摘要\n'
+                + '日期: ' + (parsed.date || '?') + '\n'
+                + '時長: ' + (parsed.sessionDurationSec || 0) + 's\n'
+                + '觸碰: ' + (parsed.touches || 0) + '\n'
+                + '呼吸次數: ' + (parsed.breathCount || 0) + '\n'
+                + '類型: ' + (parsed.ariPhase || '?') + '\n'
+                + '事件數: ' + (parsed.eventLog ? parsed.eventLog.length : 0) + '\n'
+                + '停頓數: ' + (parsed.idleWindows ? parsed.idleWindows.length : 0) + '\n'
+                + '最長停留: ' + (parsed.dwellTimes && parsed.dwellTimes.length > 0 ? Math.max.apply(null, parsed.dwellTimes) : 0) + 's\n'
+                + '\n（完整數據請透過「下載」按鈕取得 .json 檔）';
+              var url = 'https://github.com/asstarivm/breath-data/issues/new?title=' + encodeURIComponent(title) + '&body=' + encodeURIComponent(summary);
               window.open(url, '_blank');
             };
             btnRow.appendChild(sendBtn);
