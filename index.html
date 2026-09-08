@@ -710,7 +710,17 @@
     sendBtn.onclick = function(e) {
       e.stopPropagation();
       var title = 'breath-' + new Date().toISOString().split('T')[0] + '-' + Math.floor(Math.random()*10000);
-      var body = encodeURIComponent('```json\n' + data + '\n```');
+      var parsed = JSON.parse(data);
+      var summary = "呼吸痕跡摘要\n"
+        + "日期: " + (parsed.date || "?") + "\n"
+        + "時長: " + (parsed.sessionDurationSec || 0) + "s\n"
+        + "觸碰: " + (parsed.touches || 0) + "\n"
+        + "呼吸次數: " + (parsed.breathCount || 0) + "\n"
+        + "類型: " + (parsed.ariPhase || "?") + "\n"
+        + "事件數: " + ((parsed.eventLog || []).length) + "\n"
+        + "停頓數: " + ((parsed.idleWindows || []).length) + "\n"
+        + "最長停留: " + (Math.max.apply(null, (parsed.dwellTimes || [0])).toFixed(1)) + "s";
+      var body = encodeURIComponent(summary);
       var url = 'https://github.com/asstarivm/breath-data/issues/new?title=' + encodeURIComponent(title) + '&body=' + body;
       window.open(url, '_blank');
     };
