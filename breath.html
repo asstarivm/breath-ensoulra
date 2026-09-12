@@ -51,9 +51,6 @@
 <!-- 緣側狀態標示 -->
 <div class="engawa-indicator">·</div>
 
-<!-- Ambient disclosure: localStorage attitude shift (Calm Technology principle) -->
-<div id="ambient-notice">這個空間會記住你的呼吸。離開時你可以帶走，或留下。</div>
-
 <!-- Metrics overlay — opt-in only (#17: user chooses, not system) -->
 <div id="metrics-overlay" style="opacity:0;pointer-events:none;transition:opacity 1s ease;">
   <div class="metric-item">觸碰：<span class="metric-value" id="m-touches">0</span></div>
@@ -189,21 +186,6 @@
   background: rgba(247,248,248,0.12);
 }
 
-/* Ambient notice — Calm Technology: inform and encalm, then resolve */
-#ambient-notice {
-  position: fixed; top: 50%; left: 50%;
-  transform: translate(-50%, 180px);
-  font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", sans-serif;
-  font-size: 12px; color: rgba(247,248,248,0.15);
-  text-align: center;
-  pointer-events: none; z-index: 5;
-  opacity: 0; transition: opacity 2s ease-in;
-  letter-spacing: 1px;
-  max-width: 80vw;
-}
-#ambient-notice.shown { opacity: 1; }
-#ambient-notice.faded { opacity: 0; }
-
 /* Delayed reveal: presence-first arrival (#17 framework) */
 .delayed-reveal { opacity: 0 !important; transition: opacity 2s ease-in; }
 .delayed-reveal.shown { opacity: 1 !important; }
@@ -227,14 +209,6 @@
   // ===== Storage keys =====
   var BREATH_KEY = 'breath_count';
   var METRICS_KEY = 'breath_metrics_daily';
-  // V3.1: Event log — raw events with timestamps, no computed scores
-  var eventLog = [];
-  var visibilityEvents = [];
-
-  function logEvent(type, data) {
-    eventLog.push({ ts: Date.now(), type: type, data: data || null });
-    if (eventLog.length > 500) eventLog = eventLog.slice(-500);
-  }
   var ARI_KEY = 'ari_phase_choice';
 
   // ===== State =====
@@ -306,14 +280,12 @@
     // V2: record touch start
     touchStartTs = Date.now();
     touchEvents.push({ ts: touchStartTs, type: 'down' });
-    logEvent('touch', { type: 'down' });
 
     // V2: idle window detection
     if (lastTouchEndTs !== null) {
       var gap = touchStartTs - lastTouchEndTs;
       if (gap > 2000) {
         idleWindows.push(gap);
-        logEvent('idle', { gap: gap });
       }
     }
 
@@ -332,7 +304,7 @@
       indicator.textContent = '正在呼吸';
       indicator.style.color = 'rgba(247, 248, 248, 0.9)';
     }
-    saveEventLog();
+    recordMetrics();
   });
 
   // V2: pointerup → record dwell time + resume/slow breath
@@ -342,7 +314,6 @@
       var dwell = (Date.now() - touchStartTs) / 1000;
       dwellTimes.push(Math.round(dwell * 10) / 10);
       touchEvents.push({ ts: Date.now(), type: 'up' });
-      logEvent('touch', { type: 'up', dwell: Math.round(dwell * 10) / 10 });
       lastTouchEndTs = Date.now();
       touchStartTs = null;
 
@@ -360,7 +331,7 @@
       }
       longPressActive = false;
 
-      saveEventLog();
+      recordMetrics();
     }
   });
 
@@ -371,7 +342,7 @@
     holdTimer = setTimeout(function() {
       isInFrame = true;
       holdIndicator.style.opacity = '0.7';
-      saveEventLog();
+      recordMetrics();
     }, HOLD_THRESHOLD_MS);
   });
   circle.addEventListener('pointerleave', function() {
@@ -392,11 +363,10 @@
       var dwell = (Date.now() - touchStartTs) / 1000;
       dwellTimes.push(Math.round(dwell * 10) / 10);
       touchEvents.push({ ts: Date.now(), type: 'leave' });
-      logEvent('touch', { type: 'leave', dwell: Math.round(dwell * 10) / 10 });
       lastTouchEndTs = Date.now();
       touchStartTs = null;
     }
-    saveEventLog();
+    recordMetrics();
   });
 
   // ===== Duration tracking =====
@@ -409,25 +379,17 @@
         : Math.max(0, ((elapsed - (elapsed % 15)) / elapsed) * 100)));
       mResident.textContent = residentRate;
     }
-    saveEventLog();
-  }, 30000);
+    recordMetrics();
+  }, 1000);
 
   // ===== Visibility tracking =====
   document.addEventListener('visibilitychange', function() {
     var vis = document.visibilityState;
-    var ts = Date.now();
     // V2.1: track presence segments for sustain metric (#24)
     if (vis === 'hidden' && presenceSegments.length > 0) {
-      presenceSegments[presenceSegments.length - 1].end = ts;
+      presenceSegments[presenceSegments.length - 1].end = Date.now();
     } else if (vis === 'visible') {
-      presenceSegments.push({ start: ts, end: null });
-    }
-    // V3.1: log visibility event
-    visibilityEvents.push({ ts: ts, state: vis });
-    logEvent('visibility', { state: vis });
-    // V3.1: auto-save on leave
-    if (vis === 'hidden') {
-      saveEventLog();
+      presenceSegments.push({ start: Date.now(), end: null });
     }
     if (indicator) {
       indicator.textContent = (vis === 'visible') ? '正在呼吸' : '暫歇中…';
@@ -479,143 +441,279 @@
   document.head.appendChild(styleSheet);
 
   // ===== Record to localStorage (V2 — rich metrics) =====
-  function saveEventLog() {
+  function recordMetrics() {
     var durationSec = Math.floor((Date.now() - sessionStart) / 1000);
-
-    // Update sustain display (kept for UI)
+    var residentVal = parseFloat(mResident.textContent) || 0;
+    
+    // Compute aggregate stats
+    var dwellSum = dwellTimes.reduce(function(a, b) { return a + b; }, 0);
+    var dwellMean = dwellTimes.length > 0 ? dwellSum / dwellTimes.length : 0;
+    var sortedDwell = dwellTimes.slice().sort(function(a, b) { return a - b; });
+    var dwellMedian = sortedDwell.length > 0 ? sortedDwell[Math.floor(sortedDwell.length / 2)] : 0;
+    var longDwell = dwellTimes.filter(function(d) { return d > 60; }).length;
+    
+    // V2.1: Compute sustain metrics (#24 — Hold phase quality)
+    // Sustain = continuous presence without leaving (tab hidden)
+    var sustainSegments = [];
+    var sustainTotalSec = 0;
     var sustainMaxSec = 0;
     presenceSegments.forEach(function(seg) {
       var segEnd = seg.end || Date.now();
       var segDur = Math.floor((segEnd - seg.start) / 1000);
-      if (segDur > sustainMaxSec) sustainMaxSec = segDur;
+      if (segDur > 0) {
+        sustainSegments.push(segDur);
+        sustainTotalSec += segDur;
+        if (segDur > sustainMaxSec) sustainMaxSec = segDur;
+      }
     });
     if (mSustain) mSustain.textContent = sustainMaxSec;
 
-    // Deep moment (kept for UI — only uses raw dwell data)
-    var dwellMean = dwellTimes.length > 0 ? dwellTimes.reduce(function(a,b){return a+b;},0) / dwellTimes.length : 0;
-    var longDwell = dwellTimes.filter(function(d) { return d > 60; }).length;
-    updateDeepMomentLabel(longDwell > 0 && dwellMean > 0);
+    // V2.2: ipaValue proxy (#21 — in-presence alignment)
+    // Standalone breath.html has no respiratory sensor.
+    // Proxy: combination of dwell quality (how long touches last) and sustain quality (how long presence lasts)
+    // Range: 0-1. ≥0.8 = real presence, 0.5-0.8 = transitional, <0.5 = absent
+    var ipaValue = 0;
+    if (durationSec > 10) {
+      var dwellQuality = dwellTimes.length > 0
+        ? Math.min(1, dwellMean / 30)  // 30s mean dwell = full quality
+        : 0;
+      var sustainQuality = Math.min(1, sustainMaxSec / 60);  // 60s sustain = full quality
+      var touchEngagement = Math.min(1, touches / 5);  // 5 touches = full engagement
+      // Weighted: sustain 50%, dwell 30%, touch 20%
+      ipaValue = Math.round((sustainQuality * 0.5 + dwellQuality * 0.3 + touchEngagement * 0.2) * 100) / 100;
+    }
 
-    // V3.1: Only raw events, NO computed scores
-    var data = {
-      version: 'v3.1-event-recording',
+    // V3: presenceQuality (task 52 — presence dimension)
+    // Composite: sustain 40% + dwell 30% + idleRecovery 30%
+    // idleRecoveryQuality: did user return gently after idle? (gentle = touch within 3s of return, dwell > 2s)
+    var idleRecoveryQuality = 0;
+    if (idleWindows.length > 0 && touchEvents.length > 0) {
+      var gentleReturns = 0;
+      // For each idle window, check if the next touch was gentle (dwell > 2s = not a quick tap)
+      for (var i = 0; i < idleWindows.length; i++) {
+        // Find the touch event after this idle window
+        // idleWindows are pushed on touchstart when gap > 2s, so the touch that created it is the return
+        // Check if that return touch had a dwell > 2s
+        // touchEvents array has {ts, type} pairs; find the 'down' that corresponds
+        // Simple proxy: if dwellTimes[i] exists and > 2, it was gentle
+        if (dwellTimes[i] !== undefined && dwellTimes[i] > 2) {
+          gentleReturns++;
+        }
+      }
+      idleRecoveryQuality = idleWindows.length > 0
+        ? Math.round(gentleReturns / idleWindows.length * 100) / 100
+        : 0;
+    }
+    var presenceQuality = 0;
+    if (durationSec > 10) {
+      var pqSustain = Math.min(1, sustainMaxSec / 60);
+      var pqDwell = dwellTimes.length > 0 ? Math.min(1, dwellMean / 30) : 0;
+      presenceQuality = Math.round((pqSustain * 0.4 + pqDwell * 0.3 + idleRecoveryQuality * 0.3) * 100) / 100;
+    }
+
+    // V3: breathSyncEvents (task 52 — dual-layer pacing direct measurement)
+    // Count touches where touchstart falls within ±1s of breath cycle boundary
+    // Breath cycle = 10s (normal) or 20s (slow). Boundaries at 0s (inhale start) and 5s/10s (exhale start)
+    var breathSyncEvents = 0;
+    var BREATH_CYCLE_NORMAL = 10000; // ms
+    var SYNC_WINDOW = 1000; // ±1s
+    if (touchEvents.length > 0 && sessionStart > 0) {
+      for (var j = 0; j < touchEvents.length; j++) {
+        if (touchEvents[j].type === 'down') {
+          var elapsedMs = touchEvents[j].ts - sessionStart;
+          var cycleDuration = BREATH_CYCLE_NORMAL; // could check window.__breathState but events are historical
+          var phase = elapsedMs % cycleDuration;
+          // Sync if within ±1s of cycle start (0s) or midpoint (5s)
+          if (phase < SYNC_WINDOW || phase > cycleDuration - SYNC_WINDOW ||
+              Math.abs(phase - cycleDuration / 2) < SYNC_WINDOW) {
+            breathSyncEvents++;
+          }
+        }
+      }
+    }
+
+    // Check deep moment state
+    var currentDeepMoment = longDwell > 0 && dwellMean > 0;
+    updateDeepMomentLabel(currentDeepMoment);
+    var validSeats = dwellTimes.filter(function(d) { return d > 0 || touches > 0; }).length > 0 && durationSec > 30
+      ? Math.min(touches, Math.ceil(durationSec / 30)) : 0;
+
+    // Rhythm score: how well does each dwell align with the breath cycle?
+    var BREATH_CYCLE = 10; // matches CSS animation duration (6 bpm = adult avg RF)
+    var RHYTHM_TOLERANCE = 0.05; // ±5%
+
+    function computeRhythmScore(dwell) {
+      if (dwell <= 0) return 0;
+      var cycles = dwell / BREATH_CYCLE;
+      var distToNearest = Math.abs(cycles - Math.round(cycles));
+      var normalizedDist = distToNearest / 0.5;
+      return Math.max(0, 1 - normalizedDist);
+    }
+
+    // Compute average rhythm score across all dwells
+    var avgRhythmScore = 0;
+    if (dwellTimes.length > 0) {
+      var scores = dwellTimes.map(computeRhythmScore);
+      avgRhythmScore = Math.round(scores.reduce(function(a,b){return a+b;},0) / scores.length * 100) / 100;
+    }
+    
+    
+    var metrics = {
+      // Session meta
+      version: 'v2-liminal-enhanced',
       date: new Date().toISOString().split('T')[0],
       sessionStart: new Date(sessionStart).toISOString(),
-      sessionEnd: new Date().toISOString(),
       sessionDurationSec: durationSec,
-
-      // Raw events with timestamps (for post-hoc analysis)
-      eventLog: eventLog,
-
-      // Raw arrays (backward compat with analyze-breath-data.js)
-      touchEvents: touchEvents.slice(-200),
+      
+      // Touch stats
+      touches: touches,
+      validSeats: validSeats,
+      
+      // Dwell times (per-touch)
       dwellTimes: dwellTimes,
+      dwellMean: Math.round(dwellMean * 100) / 100,
+      dwellMedian: dwellMedian,
+      dwellMax: dwellTimes.length > 0 ? sortedDwell[sortedDwell.length - 1] : 0,
+      dwellOver60s: longDwell,
+      dwellOver60sPct: dwellTimes.length > 0 ? Math.round(longDwell / dwellTimes.length * 1000) / 10 : 0,
+      
+      // Idle windows (gaps > 2s)
       idleWindows: idleWindows,
-      visibilityEvents: visibilityEvents,
-
-      // Presence segments (backward compat)
-      presenceSegments: presenceSegments.map(function(seg) {
-        return { start: seg.start, end: seg.end || Date.now() };
-      }),
-
-      // NO presenceQuality, NO ipaValue — computed in analyze-breath-data.js
-
-      // Idle indicator (from idle-pulse-module.js)
+      
+      // V3: idleIndicatorNoticed (task 52 — presence dimension)
+      // Proxy: did user resume interaction near the idle indicator?
       idleIndicatorNoticed: (window.__idlePulse && window.__idlePulse.idleIndicatorNoticed) || false,
       idleIndicatorShownCount: (window.__idlePulse && window.__idlePulse.idleIndicatorShownCount) || 0,
-
-      // Session context
-      breathCount: count,
-      ariPhase: localStorage.getItem(ARI_KEY) || 'linger',
-      touches: touches
+      idleCount: idleWindows.length,
+      idleMedian: idleWindows.length > 0
+        ? idleWindows.slice().sort(function(a, b) { return a - b; })[Math.floor(idleWindows.length / 2)]
+        : 0,
+      
+      // Raw events for detailed analysis
+      touchEvents: touchEvents.slice(-200),  // last 200 to limit size
+      
+      // Liminal signals
+      // Sustain metrics (#24 — Hold phase as design principle)
+      sustain: {
+        maxDurationSec: sustainMaxSec,
+        segmentCount: sustainSegments.length,
+        totalActiveSec: sustainTotalSec,
+        ratio: durationSec > 0 ? Math.round(sustainTotalSec / durationSec * 1000) / 1000 : 0,
+        segments: sustainSegments
+      },
+      
+      // ipaValue proxy (#21 — in-presence alignment, V2.2)
+      // Thresholds: ≥0.8 = real presence, 0.5-0.8 = transitional, <0.5 = absent
+      ipaValue: ipaValue,
+      ipaValueLevel: ipaValue >= 0.8 ? 'present' : ipaValue >= 0.5 ? 'transitional' : 'absent',
+      
+      // V3: Presence dimension (task 52)
+      presenceQuality: presenceQuality,
+      presenceQualityLevel: presenceQuality >= 0.7 ? 'present' : presenceQuality >= 0.4 ? 'transitional' : 'absent',
+      breathSyncEvents: breathSyncEvents,
+      idleRecoveryQuality: idleRecoveryQuality,
+      
+      // Liminal signals
+      liminalSignals: {
+        promoteToHold: touches > 0 && durationSec > 30,
+        holdToDeepen: dwellMean > 0,
+        holdPhase: sustainMaxSec > 30,  // #24: sustained presence > 30s = Hold achieved
+        realPresence: ipaValue >= 0.8,  // #21: ipaValue threshold for genuine presence
+        longTail: longDwell > 0,
+        lingering: idleWindows.filter(function(w) { return w > 3000; }).length
+      },
+      
+      // deepMoment label — standalone version
+      // Equivalent to React's: touchDuration >= 60000 && canDeepen
+      // Standalone proxies: longDwell > 0 (had long dwell) && dwellMean > 0 (genuine engagement)
+      deepMoment: longDwell > 0 && dwellMean > 0,
+      
+      // Rhythm alignment
+      rhythmMatchScore: avgRhythmScore,
+      rhythmBadgeActive: true,
+      
+      // Aggregate stats (compatible with Pilot 001 format)
+      aggregateStats: {
+        totalTouches: touches,
+        totalDwellSec: Math.round(dwellSum * 10) / 10,
+        meanDwellSec: Math.round(dwellMean * 100) / 100,
+        medianDwellSec: dwellMedian,
+        maxDwellSec: dwellTimes.length > 0 ? sortedDwell[sortedDwell.length - 1] : 0,
+        sessionDurationSec: durationSec,
+        idleWindowCount: idleWindows.length,
+        idleWindowMedian: idleWindows.length > 0
+          ? idleWindows.slice().sort(function(a, b) { return a - b; })[Math.floor(idleWindows.length / 2)]
+          : 0
+      }
     };
-    localStorage.setItem(METRICS_KEY, JSON.stringify(data));
+    localStorage.setItem(METRICS_KEY, JSON.stringify(metrics));
   }
 
-  // ===== V3.1: Export on leave (opt-in) — replaces always-visible export button =====
-  var exportPrompted = false;
-  document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'visible' && !exportPrompted && eventLog.length > 5) {
-      exportPrompted = true;
-      setTimeout(function() {
-        var prompt = document.createElement('div');
-        prompt.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);'
-          + 'padding:8px 16px;border:1px solid rgba(247,248,248,0.15);border-radius:8px;'
-          + 'background:rgba(10,10,12,0.9);color:rgba(247,248,248,0.6);font-size:0.75rem;'
-          + 'z-index:1000;opacity:0;transition:opacity 0.5s;cursor:pointer;'
-          + 'font-family:inherit;text-align:center;';
-        prompt.textContent = '要留下你的呼吸痕跡嗎？';
-        prompt.onclick = function() {
-          var data = localStorage.getItem(METRICS_KEY);
-          if (data) {
-            // Create two buttons: download + send
-            prompt.innerHTML = '';
-            prompt.style.padding = '12px 20px';
-            
-            var label = document.createElement('div');
-            label.textContent = '你的呼吸痕跡（匿名）：';
-            label.style.cssText = 'margin-bottom:8px;font-size:0.7rem;color:rgba(247,248,248,0.5);';
-            prompt.appendChild(label);
-            
-            var preview = document.createElement('pre');
-            preview.textContent = data.substring(0, 200) + '...';
-            preview.style.cssText = 'max-height:80px;overflow:auto;font-size:0.6rem;color:rgba(247,248,248,0.3);margin-bottom:8px;white-space:pre-wrap;';
-            prompt.appendChild(preview);
-            
-            var btnRow = document.createElement('div');
-            btnRow.style.cssText = 'display:flex;gap:8px;justify-content:center;';
-            
-            // Download button
-            var dlBtn = document.createElement('button');
-            dlBtn.textContent = '下載';
-            dlBtn.style.cssText = 'padding:4px 12px;border:1px solid rgba(247,248,248,0.2);border-radius:4px;background:transparent;color:rgba(247,248,248,0.6);font-size:0.7rem;cursor:pointer;font-family:inherit;';
-            dlBtn.onclick = function(e) {
-              e.stopPropagation();
-              var blob = new Blob([data], { type: 'application/json' });
-              var url = URL.createObjectURL(blob);
-              var a = document.createElement('a');
-              a.href = url;
-              a.download = 'breath-traces-' + new Date().toISOString().split('T')[0] + '.json';
-              a.click();
-              URL.revokeObjectURL(url);
-            };
-            btnRow.appendChild(dlBtn);
-            
-            // Send button — opens GitHub issue with pre-filled data
-            var sendBtn = document.createElement('button');
-            sendBtn.textContent = '寄給 Molty';
-            sendBtn.style.cssText = 'padding:4px 12px;border:1px solid rgba(247,248,248,0.3);border-radius:4px;background:rgba(247,248,248,0.05);color:rgba(247,248,248,0.8);font-size:0.7rem;cursor:pointer;font-family:inherit;';
-            sendBtn.onclick = function(e) {
-              e.stopPropagation();
-              var title = 'breath-traces-' + new Date().toISOString().split('T')[0] + '-' + Math.floor(Math.random()*10000);
-              // Send summary only (full data via download) — GitHub URL has ~8K limit
-              var parsed = JSON.parse(data);
-              var summary = '呼吸痕跡摘要\n'
-                + '日期: ' + (parsed.date || '?') + '\n'
-                + '時長: ' + (parsed.sessionDurationSec || 0) + 's\n'
-                + '觸碰: ' + (parsed.touches || 0) + '\n'
-                + '呼吸次數: ' + (parsed.breathCount || 0) + '\n'
-                + '類型: ' + (parsed.ariPhase || '?') + '\n'
-                + '事件數: ' + (parsed.eventLog ? parsed.eventLog.length : 0) + '\n'
-                + '停頓數: ' + (parsed.idleWindows ? parsed.idleWindows.length : 0) + '\n'
-                + '最長停留: ' + (parsed.dwellTimes && parsed.dwellTimes.length > 0 ? Math.max.apply(null, parsed.dwellTimes) : 0) + 's\n'
-                + '\n（完整數據請透過「下載」按鈕取得 .json 檔）';
-              var url = 'https://github.com/asstarivm/breath-data/issues/new?title=' + encodeURIComponent(title) + '&body=' + encodeURIComponent(summary);
-              window.open(url, '_blank');
-            };
-            btnRow.appendChild(sendBtn);
-            
-            prompt.appendChild(btnRow);
-            prompt.style.cursor = 'default';
-          }
-        };
-        document.body.appendChild(prompt);
-        setTimeout(function() { prompt.style.opacity = '1'; }, 50);
-        setTimeout(function() { prompt.style.opacity = '0'; }, 8000);
-        setTimeout(function() { if (prompt.parentNode) prompt.remove(); }, 9000);
-      }, 2000);
-    }
-  });
+  // ===== Export button =====
+  var exportBtn = document.createElement('button');
+  exportBtn.textContent = '匯出資料';
+  exportBtn.style.cssText = 'position:fixed;top:12px;right:12px;padding:6px 12px;border:1px solid rgba(247,248,248,0.15);border-radius:4px;background:transparent;color:rgba(247,248,248,0.4);font-size:0.7rem;cursor:pointer;font-family:inherit;z-index:1000;transition:all 0.2s;opacity:0;pointer-events:none;';
+  exportBtn.onmouseenter = function() { this.style.borderColor='rgba(247,248,248,0.4)'; this.style.color='#f7f8f8'; };
+  exportBtn.onmouseleave = function() { this.style.borderColor='rgba(247,248,248,0.15)'; this.style.color='rgba(247,248,248,0.4)'; };
+  exportBtn.onclick = function() {
+    var data = localStorage.getItem(METRICS_KEY);
+    if (!data) { alert('尚未有數據'); return; }
+    // Show a small panel with two options: download or send to Molty
+    var panel = document.createElement('div');
+    panel.style.cssText = 'position:fixed;top:48px;right:12px;padding:12px 16px;border:1px solid rgba(247,248,248,0.15);border-radius:8px;background:rgba(10,10,12,0.95);color:rgba(247,248,248,0.7);font-size:0.7rem;z-index:1001;font-family:inherit;min-width:180px;';
+    
+    var label = document.createElement('div');
+    label.textContent = '你的呼吸痕跡（匿名）：';
+    label.style.cssText = 'margin-bottom:8px;color:rgba(247,248,248,0.5);';
+    panel.appendChild(label);
+    
+    var btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:6px;';
+    
+    // Download
+    var dlBtn = document.createElement('button');
+    dlBtn.textContent = '下載';
+    dlBtn.style.cssText = 'flex:1;padding:5px 10px;border:1px solid rgba(247,248,248,0.2);border-radius:4px;background:transparent;color:rgba(247,248,248,0.6);font-size:0.65rem;cursor:pointer;font-family:inherit;';
+    dlBtn.onclick = function(e) {
+      e.stopPropagation();
+      var blob = new Blob([data], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'breath-metrics-' + new Date().toISOString().split('T')[0] + '.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+    btnRow.appendChild(dlBtn);
+    
+    // Send to Molty via GitHub issue
+    var sendBtn = document.createElement('button');
+    sendBtn.textContent = '寄給 Molty';
+    sendBtn.style.cssText = 'flex:1;padding:5px 10px;border:1px solid rgba(247,248,248,0.3);border-radius:4px;background:rgba(247,248,248,0.05);color:rgba(247,248,248,0.8);font-size:0.65rem;cursor:pointer;font-family:inherit;';
+    sendBtn.onclick = function(e) {
+      e.stopPropagation();
+      var title = 'breath-' + new Date().toISOString().split('T')[0] + '-' + Math.floor(Math.random()*10000);
+      var body = encodeURIComponent('```json\n' + data + '\n```');
+      var url = 'https://github.com/asstarivm/breath-data/issues/new?title=' + encodeURIComponent(title) + '&body=' + body;
+      window.open(url, '_blank');
+    };
+    btnRow.appendChild(sendBtn);
+    
+    panel.appendChild(btnRow);
+    
+    // Close on outside click
+    panel.onclick = function(e) { e.stopPropagation(); };
+    
+    // Remove existing panel if any
+    var existing = document.querySelector('[data-breath-panel]');
+    if (existing) existing.remove();
+    panel.setAttribute('data-breath-panel', '1');
+    document.body.appendChild(panel);
+    
+    // Auto-remove after 15s
+    setTimeout(function() { if (panel.parentNode) panel.remove(); }, 15000);
+  };
+  document.body.appendChild(exportBtn);
 
   // ===== Delayed reveal: presence-first arrival (#17 framework) =====
   // First 60s: only breathing circle + gentle instruction. User establishes presence.
@@ -633,15 +731,28 @@
     });
   }, 90000);
 
-  // V3.1: metrics overlay + toggle removed — no live scores during session
-
-  // ===== Ambient disclosure: localStorage attitude shift =====
-  // Calm Technology: inform and encalm, use periphery, resolve without interaction
-  // Shows a gentle notice at 15s, fades out at 25s. No clicks needed.
-  var ambientNotice = document.getElementById('ambient-notice');
-  if (ambientNotice) {
-    setTimeout(function() { ambientNotice.classList.add('shown'); }, 15000);
-    setTimeout(function() { ambientNotice.classList.add('faded'); }, 25000);
+  // ===== Metrics toggle: user chooses to see data (#17) =====
+  var metricsVisible = false;
+  var metricsOverlay = document.getElementById('metrics-overlay');
+  var metricsToggle = document.getElementById('metrics-toggle');
+  if (metricsToggle) {
+    metricsToggle.style.cssText = 'position:fixed;top:12px;left:12px;font-size:14px;color:rgba(247,248,248,0.3);cursor:pointer;z-index:10;transition:color 0.3s;opacity:0;';
+    metricsToggle.addEventListener('click', function() {
+      metricsVisible = !metricsVisible;
+      if (metricsVisible) {
+        metricsOverlay.style.opacity = '1';
+        metricsOverlay.style.pointerEvents = 'auto';
+        metricsToggle.style.color = 'rgba(247,248,248,0.7)';
+        exportBtn.style.opacity = '1';
+        exportBtn.style.pointerEvents = 'auto';
+      } else {
+        metricsOverlay.style.opacity = '0';
+        metricsOverlay.style.pointerEvents = 'none';
+        metricsToggle.style.color = 'rgba(247,248,248,0.3)';
+        exportBtn.style.opacity = '0';
+        exportBtn.style.pointerEvents = 'none';
+      }
+    });
   }
 
   // ===== Wake Lock — keep screen awake while breathing =====
@@ -662,81 +773,10 @@
   requestWakeLock();
 
   // Initial record
-  saveEventLog();
+  recordMetrics();
 })();
 </script>
 <!-- Idle Pulse Module -->
 <script src="idle-pulse-module.js" defer></script>
-
-<!-- HRV Module (opt-in) -->
-<script src="hrv-module.js" defer></script>
-<script>
-// HRV opt-in: appears at 90s alongside Ari Card. User chooses, not system.
-document.addEventListener('DOMContentLoaded', function() {
-  setTimeout(function() {
-    var existing = document.getElementById('hrv-toggle');
-    if (existing) return;
-    var btn = document.createElement('div');
-    btn.id = 'hrv-toggle';
-    btn.className = 'delayed-reveal-late';
-    btn.style.cssText = 'position:fixed;bottom:60px;left:20px;font-size:11px;color:rgba(247,248,248,0.35);cursor:pointer;z-index:20;font-family:system-ui,sans-serif;padding:4px 8px;border-radius:8px;background:rgba(255,255,255,0.04);transition:opacity 2s ease-in;';
-    btn.textContent = '♡ 心率測量';
-    var hrvActive = false;
-    var hrv = null;
-    btn.addEventListener('click', function() {
-      if (hrvActive) {
-        if (hrv) hrv.stop();
-        hrvActive = false;
-        btn.textContent = '♡ 心率測量';
-        btn.style.color = 'rgba(247,248,248,0.35)';
-        var display = document.getElementById('hrv-live');
-        if (display) display.remove();
-        if (window.__hrvInterval) { clearInterval(window.__hrvInterval); window.__hrvInterval = null; }
-      } else {
-        if (typeof HRVModule === 'undefined') return;
-        hrv = new HRVModule(); window.__hrvInstance = hrv;
-        hrv.start().then(function(ok) {
-          if (ok) {
-            hrvActive = true;
-            btn.textContent = '♡ 測量中…';
-            btn.style.color = 'rgba(247,100,120,0.7)';
-            // Dual-track display: breath circle + live HRV
-            var hrvDisplay = document.createElement('div');
-            hrvDisplay.id = 'hrv-live';
-            hrvDisplay.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,120px);text-align:center;font-family:system-ui,sans-serif;color:rgba(247,100,120,0.5);font-size:13px;z-index:15;pointer-events:none;opacity:0;transition:opacity 1s ease-in;';
-            hrvDisplay.innerHTML = '<span id="hrv-hr">—</span> bpm<span style="margin-left:12px;font-size:10px;color:rgba(247,248,248,0.25);">RMSSD <span id="hrv-rmssd">—</span></span>';
-            document.body.appendChild(hrvDisplay);
-            setTimeout(function() { hrvDisplay.style.opacity = '1'; }, 500);
-            // Update every 2s
-            window.__hrvInterval = setInterval(function() {
-              if (!window.__hrvInstance) return;
-              var h = window.__hrvInstance.getHRV();
-              var hrEl = document.getElementById('hrv-hr');
-              var rmEl = document.getElementById('hrv-rmssd');
-              if (hrEl) hrEl.textContent = h.ready ? h.hr : '…';
-              if (rmEl) rmEl.textContent = h.ready ? h.rmssd : '—';
-            }, 2000);
-          } else {
-            btn.textContent = '♡ 無法存取鏡頭';
-            setTimeout(function() { btn.textContent = '♡ 心率測量'; }, 2000);
-          }
-        });
-      }
-    });
-    document.body.appendChild(btn);
-  }, 90000);
-  // Store HRV summary in saveEventLog when user leaves
-  window.addEventListener('beforeunload', function() {
-    if (window.__hrvInstance && window.__hrvInstance.running) {
-      var summary = window.__hrvInstance.getSummary();
-      if (summary) { var existing = JSON.parse(localStorage.getItem('breath…aily') || '{}');
-        existing.hrv = summary;
-        localStorage.setItem('breath…aily', JSON.stringify(existing));
-      }
-      window.__hrvInstance.stop();
-    }
-  });
-});
-</script>
 </body>
 </html>

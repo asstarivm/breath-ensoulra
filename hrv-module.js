@@ -83,48 +83,98 @@
     }
   };
 
+  // Biquad bandpass filter (Butterworth 2nd order, 0.6-3.5 Hz at 25fps)
+  HRVModule.prototype._biquadBandpass = function(input) {
+    // Coefficients for 2nd order Butterworth bandpass
+    // Center freq: ~1.5 Hz (90 bpm), bandwidth: 0.6-3.5 Hz
+    // Sample rate: 25 Hz
+    // Using cookbook formulas (RBJ Audio EQ Cookbook)
+    var fs = 25;
+    var f0 = 1.5; // center frequency
+    var Q = 0.7; // quality factor
+    var w0 = 2 * Math.PI * f0 / fs;
+    var sinW = Math.sin(w0);
+    var cosW = Math.cos(w0);
+    var alpha = sinW / (2 * Q);
+    
+    // Bandpass coefficients (constant 0 dB peak gain)
+    var b0 = alpha;
+    var b1 = 0;
+    var b2 = -alpha;
+    var a0 = 1 + alpha;
+    var a1 = -2 * cosW;
+    var a2 = 1 - alpha;
+    
+    // Normalize
+    b0 /= a0; b1 /= a0; b2 /= a0; a1 /= a0; a2 /= a0;
+    
+    var x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    var output = new Array(input.length);
+    for (var i = 0; i < input.length; i++) {
+      var x0 = input[i];
+      var y0 = b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+      output[i] = y0;
+      x2 = x1; x1 = x0;
+      y2 = y1; y1 = y0;
+    }
+    return output;
+  };
+
   HRVModule.prototype._detectPeaks = function() {
     if (this.samples.length < 50) return;
 
-    // Simple bandpass: moving average subtraction (detrend) + find peaks
     var s = this.samples;
     var n = s.length;
     
-    // Detrend: subtract moving average (window=15)
-    var detrended = [];
-    var window = 15;
+    // Extract raw signal
+    var raw = new Array(n);
+    for (var i = 0; i < n; i++) raw[i] = s[i].g;
+    
+    // 1. Detrend: subtract moving average (window=15)
+    var detrended = new Array(n);
+    var win = 15;
     for (var i = 0; i < n; i++) {
-      var start = Math.max(0, i - window);
-      var end = Math.min(n, i + window);
+      var start = Math.max(0, i - win);
+      var end = Math.min(n, i + win);
       var ma = 0;
-      for (var j = start; j < end; j++) ma += s[j].g;
+      for (var j = start; j < end; j++) ma += raw[j];
       ma /= (end - start);
-      detrended.push({ t: s[i].t, v: s[i].g - ma });
+      detrended[i] = raw[i] - ma;
     }
-
-    // Find zero-crossings (upward) as simple peak detection
-    // In production: use proper bandpass filter 0.7-3.5 Hz + peak detection
-    for (var i = 1; i < detrended.length; i++) {
-      if (detrended[i].v > 0 && detrended[i-1].v <= 0) {
-        // Check if this is a "real" peak (amplitude threshold)
-        var maxV = 0;
-        for (var k = i; k < Math.min(detrended.length, i + 10); k++) {
-          if (detrended[k].v > maxV) maxV = detrended[k].v;
-        }
-        if (maxV > 0.3) { // threshold — will need tuning
-          var peakTime = s[i].t;
-          if (this.lastPeak !== null) {
-            var rr = peakTime - this.lastPeak;
-            // Plausible RR: 300ms (200bpm) to 2000ms (30bpm)
-            if (rr > 300 && rr < 2000) {
-              this.rrIntervals.push(rr);
-              if (this.rrIntervals.length > 100) {
-                this.rrIntervals = this.rrIntervals.slice(-100);
-              }
+    
+    // 2. Bandpass filter (Butterworth 2nd order, 0.6-3.5 Hz)
+    var filtered = this._biquadBandpass(detrended);
+    
+    // 3. Peak detection: adaptive threshold + refractory period
+    var maxVal = 0;
+    for (var i = 0; i < n; i++) {
+      if (Math.abs(filtered[i]) > maxVal) maxVal = Math.abs(filtered[i]);
+    }
+    var threshold = maxVal * 0.65; // 65% of max amplitude (was 50% — too low)
+    
+    // Refractory period: after a peak, wait at least 400ms (150bpm max) before next
+    var minRR = 400; // ms
+    
+    for (var i = 2; i < n - 2; i++) {
+      // Local maximum: greater than 4 neighbors + above threshold
+      if (filtered[i] > filtered[i-1] && filtered[i] > filtered[i+1] && 
+          filtered[i] > filtered[i-2] && filtered[i] > filtered[i+2] &&
+          filtered[i] > threshold) {
+        var peakTime = s[i].t;
+        if (this.lastPeak !== null) {
+          var rr = peakTime - this.lastPeak;
+          // Plausible RR: 400ms (150bpm) to 2000ms (30bpm) + refractory check
+          if (rr >= minRR && rr <= 2000) {
+            this.rrIntervals.push(rr);
+            if (this.rrIntervals.length > 100) {
+              this.rrIntervals = this.rrIntervals.slice(-100);
             }
+          } else if (rr < minRR) {
+            // Too soon — skip this peak, keep lastPeak (refractory)
+            continue;
           }
-          this.lastPeak = peakTime;
         }
+        this.lastPeak = peakTime;
       }
     }
   };
