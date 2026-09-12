@@ -51,9 +51,6 @@
 <!-- 緣側狀態標示 -->
 <div class="engawa-indicator">·</div>
 
-<!-- Ambient disclosure: localStorage attitude shift (Calm Technology principle) -->
-<div id="ambient-notice">這個空間會記住你的呼吸。離開時你可以帶走，或留下。</div>
-
 <!-- Metrics overlay — opt-in only (#17: user chooses, not system) -->
 <div id="metrics-overlay" style="opacity:0;pointer-events:none;transition:opacity 1s ease;">
   <div class="metric-item">觸碰：<span class="metric-value" id="m-touches">0</span></div>
@@ -189,20 +186,6 @@
   background: rgba(247,248,248,0.12);
 }
 
-/* Ambient notice — Calm Technology: inform and encalm, then resolve */
-#ambient-notice {
-  position: fixed; top: 50%; left: 50%;
-  transform: translate(-50%, 180px);
-  font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", sans-serif;
-  font-size: 12px; color: rgba(247,248,248,0.15);
-  text-align: center;
-  pointer-events: none; z-index: 5;
-  opacity: 0; transition: opacity 2s ease-in;
-  letter-spacing: 1px;
-  max-width: 80vw;
-}
-#ambient-notice.shown { opacity: 1; }
-#ambient-notice.faded { opacity: 0; }
 /* Delayed reveal: presence-first arrival (#17 framework) */
 .delayed-reveal { opacity: 0 !important; transition: opacity 2s ease-in; }
 .delayed-reveal.shown { opacity: 1 !important; }
@@ -710,17 +693,7 @@
     sendBtn.onclick = function(e) {
       e.stopPropagation();
       var title = 'breath-' + new Date().toISOString().split('T')[0] + '-' + Math.floor(Math.random()*10000);
-      var parsed = JSON.parse(data);
-      var summary = "呼吸痕跡摘要\n"
-        + "日期: " + (parsed.date || "?") + "\n"
-        + "時長: " + (parsed.sessionDurationSec || 0) + "s\n"
-        + "觸碰: " + (parsed.touches || 0) + "\n"
-        + "呼吸次數: " + (parsed.breathCount || 0) + "\n"
-        + "類型: " + (parsed.ariPhase || "?") + "\n"
-        + "事件數: " + ((parsed.eventLog || []).length) + "\n"
-        + "停頓數: " + ((parsed.idleWindows || []).length) + "\n"
-        + "最長停留: " + (Math.max.apply(null, (parsed.dwellTimes || [0])).toFixed(1)) + "s";
-      var body = encodeURIComponent(summary);
+      var body = encodeURIComponent('```json\n' + data + '\n```');
       var url = 'https://github.com/asstarivm/breath-data/issues/new?title=' + encodeURIComponent(title) + '&body=' + body;
       window.open(url, '_blank');
     };
@@ -742,13 +715,6 @@
   };
   document.body.appendChild(exportBtn);
 
-  // ===== Ambient disclosure: localStorage attitude shift =====
-  // Calm Technology: inform and encalm, use periphery, resolve without interaction
-  var ambientNotice = document.getElementById('ambient-notice');
-  if (ambientNotice) {
-    setTimeout(function() { ambientNotice.classList.add('shown'); }, 15000);
-    setTimeout(function() { ambientNotice.classList.add('faded'); }, 25000);
-  }
   // ===== Delayed reveal: presence-first arrival (#17 framework) =====
   // First 60s: only breathing circle + gentle instruction. User establishes presence.
   // 60s: counter/rhythm fade in (peripheral awareness).
@@ -811,6 +777,6 @@
 })();
 </script>
 <!-- Idle Pulse Module -->
-<script src="/idle-pulse-module.js" defer></script>
+<script src="idle-pulse-module.js" defer></script>
 </body>
 </html>
