@@ -544,7 +544,15 @@
           + 'background:rgba(10,10,12,0.9);color:rgba(247,248,248,0.6);font-size:0.75rem;'
           + 'z-index:1000;opacity:0;transition:opacity 0.5s;cursor:pointer;'
           + 'font-family:inherit;text-align:center;';
-        prompt.textContent = '要留下你的呼吸痕跡嗎？';
+        // Reincorporation: show what the user is taking with them
+        var parsed = JSON.parse(localStorage.getItem(METRICS_KEY) || '{}');
+        var breathN = parsed.breathCount || 0;
+        var sessionSec = parsed.sessionDurationSec || 0;
+        var touchN = parsed.touches || 0;
+        var idleCount = (parsed.idleWindows || []).length;
+        var longestDwell = 0;
+        (parsed.dwellTimes || []).forEach(function(d) { if (d > longestDwell) longestDwell = d; });
+        prompt.textContent = '你的呼吸：' + breathN + ' 次，停了 ' + idleCount + ' 次，最長停留 ' + longestDwell.toFixed(1) + ' 秒。帶走嗎？';
         prompt.onclick = function() {
           var data = localStorage.getItem(METRICS_KEY);
           if (data) {
@@ -553,14 +561,9 @@
             prompt.style.padding = '12px 20px';
             
             var label = document.createElement('div');
-            label.textContent = '你的呼吸痕跡（匿名）：';
+            label.textContent = '你的呼吸：' + breathN + ' 次 | 停留 ' + Math.round(sessionSec/60) + ' 分鐘 | 最長停留 ' + longestDwell.toFixed(1) + ' 秒';
             label.style.cssText = 'margin-bottom:8px;font-size:0.7rem;color:rgba(247,248,248,0.5);';
             prompt.appendChild(label);
-            
-            var preview = document.createElement('pre');
-            preview.textContent = data.substring(0, 200) + '...';
-            preview.style.cssText = 'max-height:80px;overflow:auto;font-size:0.6rem;color:rgba(247,248,248,0.3);margin-bottom:8px;white-space:pre-wrap;';
-            prompt.appendChild(preview);
             
             var btnRow = document.createElement('div');
             btnRow.style.cssText = 'display:flex;gap:8px;justify-content:center;';
