@@ -568,17 +568,45 @@
             var btnRow = document.createElement('div');
             btnRow.style.cssText = 'display:flex;gap:8px;justify-content:center;';
             
-            // Download button
+            // Download button — SVG pulse chart (Reincorporation: take away a visual)
             var dlBtn = document.createElement('button');
-            dlBtn.textContent = '下載';
-            dlBtn.style.cssText = 'padding:4px 12px;border:1px solid rgba(247,248,248,0.2);border-radius:4px;background:transparent;color:rgba(247,248,248,0.6);font-size:0.7rem;cursor:pointer;font-family:inherit;';
+            dlBtn.textContent = '帶走呼吸圖';
+            dlBtn.style.cssText = 'padding:4px 12px;border:1px solid rgba(247,248,248,0.3);border-radius:4px;background:rgba(247,248,248,0.05);color:rgba(247,248,248,0.8);font-size:0.7rem;cursor:pointer;font-family:inherit;';
             dlBtn.onclick = function(e) {
               e.stopPropagation();
-              var blob = new Blob([data], { type: 'application/json' });
+              // Generate SVG pulse chart from dwellTimes + idleWindows
+              var p = JSON.parse(data);
+              var dwells = p.dwellTimes || [];
+              var idles = p.idleWindows || [];
+              var w = 400, h = 120, pad = 20;
+              var maxVal = Math.max.apply(null, dwells.concat([1]));
+              var totalEvents = dwells.length + idles.length;
+              var barW = totalEvents > 0 ? (w - pad * 2) / totalEvents : 1;
+              var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">';
+              svg += '<rect width="100%" height="100%" fill="#010102"/>';
+              svg += '<text x="' + pad + '" y="15" fill="rgba(247,248,248,0.4)" font-size="10" font-family="sans-serif">你的呼吸 — ' + (p.date || '') + '</text>';
+              // Draw dwell times as upward bars (blue-white)
+              // Draw idle windows as downward bars (dim red)
+              var x = pad;
+              for (var i = 0; i < dwells.length; i++) {
+                var bh = (dwells[i] / maxVal) * (h / 2 - pad);
+                svg += '<rect x="' + x + '" y="' + (h / 2 - bh) + '" width="' + (barW * 0.8) + '" height="' + bh + '" fill="rgba(247,248,248,0.4)"/>';
+                x += barW;
+              }
+              for (var i = 0; i < idles.length; i++) {
+                var ih = Math.min((idles[i] / 10000) * (h / 2 - pad), h / 2 - pad);
+                svg += '<rect x="' + x + '" y="' + (h / 2) + '" width="' + (barW * 0.8) + '" height="' + ih + '" fill="rgba(247,100,120,0.3)"/>';
+                x += barW;
+              }
+              // Center line
+              svg += '<line x1="' + pad + '" y1="' + (h / 2) + '" x2="' + (w - pad) + '" y2="' + (h / 2) + '" stroke="rgba(247,248,248,0.1)" stroke-width="1"/>';
+              svg += '<text x="' + pad + '" y="' + (h - 5) + '" fill="rgba(247,248,248,0.3)" font-size="8" font-family="sans-serif">觸碰 ↑ | 停頓 ↓ | ' + dwells.length + ' 次觸碰 · ' + idles.length + ' 次停頓</text>';
+              svg += '</svg>';
+              var blob = new Blob([svg], { type: 'image/svg+xml' });
               var url = URL.createObjectURL(blob);
               var a = document.createElement('a');
               a.href = url;
-              a.download = 'breath-traces-' + new Date().toISOString().split('T')[0] + '.json';
+              a.download = 'breath-' + (p.date || new Date().toISOString().split('T')[0]) + '.svg';
               a.click();
               URL.revokeObjectURL(url);
             };
