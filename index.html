@@ -693,7 +693,17 @@
     sendBtn.onclick = function(e) {
       e.stopPropagation();
       var title = 'breath-' + new Date().toISOString().split('T')[0] + '-' + Math.floor(Math.random()*10000);
-      var body = encodeURIComponent('```json\n' + data + '\n```');
+      var parsed = JSON.parse(data);
+      var summary = '呼吸痕跡摘要\n'
+        + '日期: ' + (parsed.date || '?') + '\n'
+        + '時長: ' + (parsed.sessionDurationSec || 0) + 's\n'
+        + '觸碰: ' + (parsed.touches || 0) + '\n'
+        + '呼吸次數: ' + (parsed.breathCount || 0) + '\n'
+        + '類型: ' + (parsed.ariPhase || '?') + '\n'
+        + '事件數: ' + ((parsed.eventLog || []).length) + '\n'
+        + '停頓數: ' + ((parsed.idleWindows || []).length) + '\n'
+        + '最長停留: ' + (Math.max.apply(null, (parsed.dwellTimes || [0])).toFixed(1)) + 's';
+      var body = encodeURIComponent(summary);
       var url = 'https://github.com/asstarivm/breath-data/issues/new?title=' + encodeURIComponent(title) + '&body=' + body;
       window.open(url, '_blank');
     };
@@ -778,5 +788,75 @@
 </script>
 <!-- Idle Pulse Module -->
 <script src="idle-pulse-module.js" defer></script>
+
+<!-- HRV Module (opt-in) -->
+<script src="hrv-module.js" defer></script>
+<script>
+// HRV opt-in: appears at 90s alongside Ari Card. User chooses, not system.
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(function() {
+    var existing = document.getElementById('hrv-toggle');
+    if (existing) return;
+    var btn = document.createElement('div');
+    btn.id = 'hrv-toggle';
+    btn.className = 'delayed-reveal-late';
+    btn.style.cssText = 'position:fixed;bottom:60px;left:20px;font-size:11px;color:rgba(247,248,248,0.35);cursor:pointer;z-index:20;font-family:system-ui,sans-serif;padding:4px 8px;border-radius:8px;background:rgba(255,255,255,0.04);transition:opacity 2s ease-in;';
+    btn.textContent = '♡ 心率測量';
+    var hrvActive = false;
+    var hrv = null;
+    btn.addEventListener('click', function() {
+      if (hrvActive) {
+        if (hrv) hrv.stop();
+        hrvActive = false;
+        btn.textContent = '♡ 心率測量';
+        btn.style.color = 'rgba(247,248,248,0.35)';
+        var display = document.getElementById('hrv-live');
+        if (display) display.remove();
+        if (window.__hrvInterval) { clearInterval(window.__hrvInterval); window.__hrvInterval = null; }
+      } else {
+        if (typeof HRVModule === 'undefined') return;
+        hrv = new HRVModule(); window.__hrvInstance = hrv;
+        hrv.start().then(function(ok) {
+          if (ok) {
+            hrvActive = true;
+            btn.textContent = '♡ 測量中…';
+            btn.style.color = 'rgba(247,100,120,0.7)';
+            // Dual-track display
+            var hrvDisplay = document.createElement('div');
+            hrvDisplay.id = 'hrv-live';
+            hrvDisplay.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,120px);text-align:center;font-family:system-ui,sans-serif;color:rgba(247,100,120,0.5);font-size:13px;z-index:15;pointer-events:none;opacity:0;transition:opacity 1s ease-in;';
+            hrvDisplay.innerHTML = '<span id="hrv-hr">—</span> bpm<span style="margin-left:12px;font-size:10px;color:rgba(247,248,248,0.25);">RMSSD <span id="hrv-rmssd">—</span></span>';
+            document.body.appendChild(hrvDisplay);
+            setTimeout(function() { hrvDisplay.style.opacity = '1'; }, 500);
+            window.__hrvInterval = setInterval(function() {
+              if (!window.__hrvInstance) return;
+              var h = window.__hrvInstance.getHRV();
+              var hrEl = document.getElementById('hrv-hr');
+              var rmEl = document.getElementById('hrv-rmssd');
+              if (hrEl) hrEl.textContent = h.ready ? h.hr : '…';
+              if (rmEl) rmEl.textContent = h.ready ? h.rmssd : '—';
+            }, 2000);
+          } else {
+            btn.textContent = '♡ 無法存取鏡頭';
+            setTimeout(function() { btn.textContent = '♡ 心率測量'; }, 2000);
+          }
+        });
+      }
+    });
+    document.body.appendChild(btn);
+  }, 90000);
+  // Store HRV summary in saveEventLog when user leaves
+  window.addEventListener('beforeunload', function() {
+    if (window.__hrvInstance && window.__hrvInstance.running) {
+      var summary = window.__hrvInstance.getSummary();
+      if (summary) { var existing = JSON.parse(localStorage.getItem('breath…aily') || '{}');
+        existing.hrv = summary;
+        localStorage.setItem('breath…aily', JSON.stringify(existing));
+      }
+      window.__hrvInstance.stop();
+    }
+  });
+});
+</script>
 </body>
 </html>
