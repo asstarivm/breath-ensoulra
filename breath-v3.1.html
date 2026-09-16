@@ -638,6 +638,30 @@
             
             prompt.appendChild(btnRow);
             prompt.style.cursor = 'default';
+            
+            // Closing ritual: light halo fade-out when user takes action (Reincorporation exit gesture)
+            // Turner's rite of passage: the exit is a visible gesture, not just leaving
+            var closingRitual = function() {
+              var halo = document.createElement('div');
+              halo.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:radial-gradient(circle at center,rgba(247,248,248,0.08),rgba(1,1,2,0.95));z-index:9999;pointer-events:none;opacity:0;transition:opacity 3s ease-in;';
+              document.body.appendChild(halo);
+              setTimeout(function() { halo.style.opacity = '1'; }, 50);
+              // Breathing circle slows and dims
+              var circle = document.getElementById('circle');
+              if (circle) {
+                circle.style.transition = 'opacity 3s ease-in, transform 3s ease-in';
+                circle.style.opacity = '0.15';
+                circle.style.transform = 'scale(0.85)';
+              }
+              // After fade completes, gently remove
+              setTimeout(function() {
+                halo.style.transition = 'opacity 2s ease-out';
+                halo.style.opacity = '0';
+                setTimeout(function() { if (halo.parentNode) halo.remove(); }, 2000);
+              }, 4000);
+            };
+            dlBtn.addEventListener('click', closingRitual, false);
+            sendBtn.addEventListener('click', closingRitual, false);
           }
         };
         document.body.appendChild(prompt);
