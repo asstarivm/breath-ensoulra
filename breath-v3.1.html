@@ -54,6 +54,14 @@
 <!-- Ambient disclosure: localStorage attitude shift (Calm Technology principle) -->
 <div id="ambient-notice">這個空間會記住你的呼吸。離開時你可以帶走，或留下。</div>
 
+<!-- Sent-out T2 threshold: three passage lines + crosshair bloom -->
+<div class="sent-out-threshold" id="sentOutThreshold">
+  <div class="sent-out-line l1"></div>
+  <div class="sent-out-line l2"></div>
+  <div class="sent-out-line l3"></div>
+  <div class="sent-out-crosshair"></div>
+</div>
+
 <!-- Metrics overlay — opt-in only (#17: user chooses, not system) -->
 <div id="metrics-overlay" style="opacity:0;pointer-events:none;transition:opacity 1s ease;">
   <div class="metric-item">觸碰：<span class="metric-value" id="m-touches">0</span></div>
@@ -220,6 +228,48 @@
 .ari-dot { width: 6px; height: 6px; border-radius: 50%; border: 1px solid rgba(247,248,248,0.5); flex-shrink: 0; }
 .ari-opt.selected .ari-dot { background: rgba(247,248,248,0.8); border-color: rgba(247,248,248,0.9); }
 /* ariFadeIn removed: replaced by delayed-reveal-late (#17) */
+
+/* ===== Sent-out T2 threshold: passage lines (draft v0.3 integration) ===== */
+/* Source: t2-line-html-draft-v02 → integrated into breath-v3.1 as candidate */
+/* Design: three parallel light lines, different durations = passage not metronome */
+.sent-out-threshold {
+  position: fixed; left: 0; right: 0; bottom: 0; height: 56px;
+  pointer-events: none; overflow: hidden; z-index: 10;
+}
+.sent-out-threshold.tone-warm {
+  background: linear-gradient(to bottom, rgba(255,215,170,0), rgba(255,180,130,0.10));
+  transition: background 2.5s ease-in-out;
+}
+.sent-out-line {
+  position: absolute; left: -10%; width: 120%; height: 1px;
+  background: linear-gradient(to right,
+    transparent 0%, rgba(255,220,180,0) 15%,
+    rgba(255,230,200,0.85) 50%, rgba(255,220,180,0) 85%, transparent 100%);
+  opacity: 0; transition: opacity 2.5s ease-in-out;
+}
+.sent-out-line.l1 { bottom: 18px; animation: sentWalk 13s linear infinite; }
+.sent-out-line.l2 { bottom: 30px; animation: sentWalk 16s linear infinite; animation-delay: -4s; }
+.sent-out-line.l3 { bottom: 42px; animation: sentWalk 11s linear infinite; animation-delay: -8s; }
+.sent-out-threshold.active .sent-out-line { opacity: 1; }
+@keyframes sentWalk {
+  0%   { transform: translateX(-25%); }
+  100% { transform: translateX(25%); }
+}
+/* T3 crosshair bloom */
+.sent-out-crosshair {
+  position: fixed; left: 50%; bottom: 14px;
+  transform: translateX(-50%) scale(0); width: 14px; height: 14px;
+  border: 1.5px solid rgba(255,230,200,0.85); border-radius: 50%;
+  opacity: 0; transition: transform 1.2s ease-out, opacity 1.2s ease-out;
+  pointer-events: none; z-index: 11;
+}
+.sent-out-crosshair::before, .sent-out-crosshair::after {
+  content: ''; position: absolute; background: rgba(255,230,200,0.85);
+}
+.sent-out-crosshair::before { left: 50%; top: -6px; width: 1px; height: 26px; transform: translateX(-50%); }
+.sent-out-crosshair::after { top: 50%; left: -6px; height: 1px; width: 26px; transform: translateY(-50%); }
+.sent-out-threshold.sent .sent-out-crosshair { transform: translateX(-50%) scale(1); opacity: 1; }
+
 </style>
 
 <script>
@@ -693,11 +743,44 @@
   // ===== Ambient disclosure: localStorage attitude shift =====
   // Calm Technology: inform and encalm, use periphery, resolve without interaction
   // Shows a gentle notice at 15s, fades out at 25s. No clicks needed.
-  var ambientNotice = document.getElementById('ambient-notice');
-  if (ambientNotice) {
-    setTimeout(function() { ambientNotice.classList.add('shown'); }, 15000);
-    setTimeout(function() { ambientNotice.classList.add('faded'); }, 25000);
+  const ambientNoticeEl = document.getElementById('ambient-notice');
+  if (ambientNoticeEl) {
+    setTimeout(function() { ambientNoticeEl.classList.add('shown'); }, 15000);
+    setTimeout(function() { ambientNoticeEl.classList.add('faded'); }, 25000);
   }
+
+
+// ===== Sent-out T2 threshold: triggered on closing ritual =====
+// When user clicks takeaway/send (closing ritual fires), the threshold lines appear
+// as a visible passage — the exit is not just leaving, it's walking through.
+(function() {
+  var sot = document.getElementById('sentOutThreshold');
+  if (!sot) return;
+  // Watch for closing ritual activation: when dlBtn or sendBtn is clicked,
+  // the halo appears. We hook into the same timing to reveal threshold lines.
+  // Phase 1: warm tone + lines appear (at the moment closing ritual starts)
+  // Phase 2: crosshair bloom (2s after)
+  function revealThreshold() {
+    sot.classList.add('tone-warm', 'active');
+    setTimeout(function() { sot.classList.add('sent'); }, 2000);
+  }
+  // Listen for clicks on takeaway/send buttons (they're created dynamically)
+  document.addEventListener('click', function(e) {
+    if (e.target && (e.target.textContent.indexOf('帶走') !== -1 || e.target.textContent.indexOf('寄給') !== -1)) {
+      revealThreshold();
+    }
+  }, true);
+  // Also reveal on beforeunload as fallback (user leaving = sent-out)
+  window.addEventListener('beforeunload', function() {
+    if (!sot.classList.contains('active')) {
+      // Only if user had a meaningful session
+      try {
+        var m = JSON.parse(localStorage.getItem(METRICS_KEY) || '{}');
+        if ((m.breathCount || 0) >= 3) { revealThreshold(); }
+      } catch(e) {}
+    }
+  });
+})();
 
   // ===== Wake Lock — keep screen awake while breathing =====
   var wakeLock = null;
