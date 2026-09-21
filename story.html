@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Why I Built a Breathing Space With No Instructions — breath</title>
+<meta name="description" content="A breathing web app with no guidance, no timer, no voice prompts. Just a circle breathing on its own. You walk in, you breathe together.">
+
+<!-- OpenGraph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Why I Built a Breathing Space With No Instructions">
+<meta property="og:description" content="No guidance. No timer. No voice. Just a circle breathing on its own. You walk in, you breathe together.">
+<meta property="og:url" content="https://asstarivm.github.io/breath-ensoulra/story.html">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Why I Built a Breathing Space With No Instructions">
+<meta name="twitter:description" content="No guidance. No timer. No voice. Just a circle breathing on its own.">
+
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a0a;
+  color: #e0e0e0;
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1.8;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 60px 24px 120px;
+}
+h1 {
+  font-size: 1.6rem;
+  font-weight: normal;
+  margin-bottom: 8px;
+  letter-spacing: 0.02em;
+}
+.subtitle {
+  color: #888;
+  font-size: 0.9rem;
+  margin-bottom: 48px;
+  font-style: italic;
+}
+p { margin-bottom: 24px; font-size: 1.05rem; }
+a { color: #7ab; text-decoration: none; border-bottom: 1px solid #345; }
+a:hover { color: #9cd; }
+em { color: #c9c; font-style: normal; }
+.highlight { color: #9cf; }
+.footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid #222; color: #666; font-size: 0.85rem; }
+.breath-link {
+  display: inline-block;
+  margin: 32px 0;
+  padding: 16px 32px;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #e0e0e0;
+  text-decoration: none;
+  font-size: 1.1rem;
+  letter-spacing: 0.05em;
+  transition: border-color 0.5s, color 0.5s;
+}
+.breath-link:hover { border-color: #555; color: #fff; }
+</style>
+</head>
+<body>
+
+<h1>Why I Built a Breathing Space With No Instructions</h1>
+<p class="subtitle">A story about silence, James Turrell, and the courage to not guide.</p>
+
+<p>
+Every breathing app I found wanted to tell me what to do.
+</p>
+
+<p>
+Breathe in for 4 seconds. Hold for 7. Breathe out for 8.
+Follow the animation. Listen to the voice. Count your breaths.
+Tap when you're done. Rate your session. Sign up to save your progress.
+</p>
+
+<p>
+I didn't want any of that. I wanted a space where I could just <em>breathe</em> —
+not because something told me to, but because I walked in and my body remembered how.
+</p>
+
+<p>
+So I built one. It's at <a href="https://asstarivm.github.io/breath-ensoulra/">breath</a>.
+</p>
+
+<p>
+There's a circle. It breathes — slowly, steadily, on its own.
+You can watch it. You can match it. You can ignore it and breathe your own rhythm.
+You can press and hold to pause. You can long-press to slow it down.
+Nobody tells you what to do.
+</p>
+
+<p>
+The circle doesn't <span class="highlight">guide</span> you. It <em>keeps you company</em>.
+</p>
+
+<p>
+I was thinking about James Turrell — the artist who makes rooms where you can't tell
+if the wall is solid or if it's an opening to the sky. His <em>Perceptual Cells</em>
+don't tell you what to see. They create a condition where seeing becomes the experience.
+</p>
+
+<p>
+I wanted that. Not an app that instructs, but a space that <em>holds</em>.
+</p>
+
+<p>
+So here's what happens:
+</p>
+
+<p>
+You open the page. For the first 15 seconds, a faint text appears at the bottom —
+just enough to tell you this exists and what it is. Then it fades. 25 seconds later,
+it's gone. After that, there's nothing but you and the circle.
+</p>
+
+<p>
+If you stay long enough, a small heart icon appears. It's optional.
+If you tap it, your webcam turns on — locally, in your browser, nothing uploaded anywhere —
+and it reads the subtle color changes in your face to detect your pulse.
+You see your heart rate alongside the breathing circle.
+Your body and the circle, side by side. Two rhythms. One conversation.
+</p>
+
+<p>
+When you're ready to leave, a prompt asks: <em>帶走嗎？</em> — "Want to take it with you?"
+</p>
+
+<p>
+You can download a small chart of your breathing session as an SVG file.
+A thin ring of light fades out around the circle — a quiet goodbye.
+Then it's over. No "Great job!" No streak counter. No "Come back tomorrow!"
+</p>
+
+<p>
+You were here. You breathed. That's the whole thing.
+</p>
+
+<p>
+I later found out that someone else — <a href="https://danielabaron.me/blog/building-a-no-frills-meditation-app/">Daniela Baron</a> —
+independently built something similar for the same reasons. She was tired of subscriptions,
+ads, and "vague spiritual platitudes and ambient whale sounds." She built a clean, simple
+breathing timer with voice prompts and deployed it to GitHub Pages.
+</p>
+
+<p>
+Her app tells you when to breathe. Mine doesn't.
+I think both are right. Some people want guidance. Some people want space.
+There should be tools for both.
+</p>
+
+<p>
+If you're the kind of person who wants a space — not instructions, not a timer,
+not a voice — just a quiet room where something is breathing and you're welcome to join:
+</p>
+
+<a href="https://asstarivm.github.io/breath-ensoulra/" class="breath-link">Open breath →</a>
+
+<p class="footer">
+No signup. No tracking. No ads. No analytics. No account. No data stored on any server.
+Your webcam stream never leaves your device. The page is static HTML on GitHub Pages.
+It will exist as long as GitHub exists.
+</p>
+
+</body>
+</html>
