@@ -874,7 +874,62 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       window.__hrvInstance.stop();
     }
+    // Also stop audio HRV proxy if running
+    if (window.AudioHRVProxy && window.AudioHRVProxy.isRunning()) {
+      var audioSummary = window.AudioHRVProxy.getSummary();
+      if (audioSummary && summary) { summary.audioHrv = audioSummary; }
+      window.AudioHRVProxy.stop();
+    }
   });
+  
+  // ===== Audio HRV Proxy (opt-in, 90s) — v0.1 =====
+  // Web Audio API microphone → breath rate → HRV proxy
+  // Zero extra hardware, opt-in, all local
+  setTimeout(function() {
+    if (!window.AudioHRVProxy) return;
+    var audioBtn = document.createElement('button');
+    audioBtn.textContent = '♪ 聽呼吸';
+    audioBtn.style.cssText = 'position:fixed;top:48px;right:12px;padding:6px 12px;border:1px solid rgba(247,248,248,0.15);border-radius:4px;background:transparent;color:rgba(247,248,248,0.4);font-size:0.7rem;cursor:pointer;font-family:inherit;z-index:1000;transition:all 0.2s;opacity:0;pointer-events:none;';
+    audioBtn.style.transition = 'opacity 2s ease, color 0.3s, border-color 0.3s';
+    audioBtn.style.opacity = '0';
+    audioBtn.style.pointerEvents = 'none';
+    audioBtn.style.position = 'fixed';
+    audioBtn.style.top = '48px';
+    audioBtn.style.right = '12px';
+    document.querySelectorAll('.delayed-reveal-late').forEach(function(el) {
+      // Show audio button at same time as other late reveals
+    });
+    setTimeout(function() {
+      audioBtn.style.opacity = '1';
+      audioBtn.style.pointerEvents = 'auto';
+    }, 90000);
+    audioBtn.onmouseenter = function() { this.style.borderColor='rgba(247,248,248,0.3)'; this.style.color='rgba(247,248,248,0.7)'; };
+    audioBtn.onmouseleave = function() { this.style.borderColor='rgba(247,248,248,0.15)'; this.style.color='rgba(247,248,248,0.4)'; };
+    audioBtn.addEventListener('click', async function() {
+      if (window.AudioHRVProxy.isRunning()) {
+        var s = window.AudioHRVProxy.getSummary();
+        if (s) console.log('[audio-hrv] Summary:', s);
+        window.AudioHRVProxy.stop();
+        audioBtn.textContent = '♪ 聽呼吸';
+        audioBtn.style.color = 'rgba(247,248,248,0.4)';
+      } else {
+        var ok = await window.AudioHRVProxy.start();
+        if (ok) {
+          audioBtn.textContent = '♪ 聽呼吸中…';
+          audioBtn.style.color = 'rgba(247,248,248,0.7)';
+        } else {
+          audioBtn.textContent = '♪ 無法存取麥克風';
+          setTimeout(function() { audioBtn.textContent = '♪ 聽呼吸'; }, 2000);
+        }
+      }
+    });
+    document.body.appendChild(audioBtn);
+  }, 90000);
+  
+  // Load audio-hrv-proxy.js
+  var audioScript = document.createElement('script');
+    audioScript.src = 'audio-hrv-proxy.js';
+    document.head.appendChild(audioScript);
 });
 </script>
 </body>
