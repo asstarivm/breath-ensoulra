@@ -930,6 +930,75 @@ document.addEventListener('DOMContentLoaded', function() {
   var audioScript = document.createElement('script');
     audioScript.src = 'audio-hrv-proxy.js';
     document.head.appendChild(audioScript);
+
+  // ===== Event-driven metrics (task 67) =====
+  // Based on daily-metrics-guide.md: 6 event types + 7-day single-item
+  var EDM_KEY = 'breath…edm';
+  var SESSION_KEY = 'breath…session';
+
+  function edmLog(eventType, data) {
+    var entry = { type: eventType, time: Date.now(), data: data || {} };
+    var log = JSON.parse(localStorage.getItem(EDM_KEY) || '[]');
+    log.push(entry);
+    // Keep only last 100 events
+    if (log.length > 100) log = log.slice(-100);
+    localStorage.setItem(EDM_KEY, JSON.stringify(log));
+  }
+
+  function edmGetEvents() {
+    return JSON.parse(localStorage.getItem(EDM_KEY) || '[]');
+  }
+
+  function edmGetLastVisit() {
+    var events = edmGetEvents();
+    var entries = events.filter(function(e) { return e.type === 'enter'; });
+    if (entries.length === 0) return 0;
+    return entries[entries.length - 1].time;
+  }
+
+  // Event 1: Enter
+  edmLog('enter', { ref: document.referrer || 'direct' });
+
+  // Event 2: Long dwell (60s)
+  setTimeout(function() {
+    edmLog('long_dwell', { dwell: 60 });
+  }, 60000);
+
+  // Event 3: Deep presence (300s)
+  setTimeout(function() {
+    edmLog('deep_presence', { dwell: 300 });
+  }, 300000);
+
+  // Event 4: Leave (beforeunload) + 7-day single-item
+  window.addEventListener('beforeunload', function() {
+    var sessionStart = JSON.parse(localStorage.getItem(SESSION_KEY) || '{}').start || Date.now();
+    var dwell = Math.round((Date.now() - sessionStart) / 1000);
+    edmLog('leave', { dwell: dwell });
+
+    // 7-day single-item prompt (non-blocking, silent log)
+    var lastVisit = edmGetLastVisit();
+    var daysSince = (Date.now() - lastVisit) / 86400000;
+    if (daysSince >= 7) {
+      edmLog('weekly_prompt_eligible', { daysSince: Math.round(daysSince) });
+      // In future: show a gentle "這週有什麼不同嗎？" prompt
+      // For now: just log eligibility. No UI yet.
+    }
+  });
+
+  // Event 5: Take away (export button click)
+  // Hooked into existing exportBtn click handler via event delegation
+  document.addEventListener('click', function(e) {
+    if (e.target && e.target.textContent && e.target.textContent.indexOf('匯出') !== -1) {
+      edmLog('take_away', {});
+    }
+    if (e.target && e.target.textContent && e.target.textContent.indexOf('寄給') !== -1) {
+      // Event 6: Send to Molty
+      edmLog('send_to_molty', {});
+    }
+  }, true);
+
+  // Store session start
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ start: Date.now() }));
 });
 </script>
 </body>
